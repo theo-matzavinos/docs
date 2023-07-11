@@ -282,3 +282,50 @@ export class MyComponentStore extends ComponentStore<MyComponentState> {
   }
 }
 ```
+
+## selectSignal
+
+Since v16 we can use the `selectSignal` method to create selectors that return [signals](../../angular/signals) instead of observables. This allows us to avoid the `*ngIf="observable$ | async as value"` pattern. (TBD we probably don't need the viewModel pattern either TBD)
+
+<Tabs>
+  <TabItem label="my-component.store.ts">
+  ```typescript
+  export type MyComponentState = {
+    myItems: MyItem[];
+    totalItems: number;
+    pageSize: number;
+  };
+
+  @Injectable()
+  export class MyComponentStore extends ComponentStore<MyComponentState> {
+    totalItems = this.selectSignal((state) => state.totalItems);
+    pageSize = this.selectSignal((state) => state.pageSize);
+    pages = this.selectSignal(
+      this.totalItems,
+      this.pageSize,
+      (totalItems, pageSize) => totalItems / pageSize
+    );
+
+    constructor() {
+      super({ myItems: [], totalItems: 0, pageSize: 10 });
+    }
+  }
+  ```
+  </TabItem>
+  <TabItem label="my-component.component.ts">
+  ```typescript
+  @Component({
+    selector: "my-component",
+    providers: [MyComponentStore],
+    template: `
+      <div>Page size: {{ myComponentStore.pageSize() }}</div>
+      <div>Pages: {{ myComponentStore.pages() }}</div>
+      <div>Total items: {{ myComponentStore.totalItems() }}</div>
+    `,
+  })
+  export class MyComponent {
+    myComponentStore = inject(MyComponentStore);
+  }
+  ```
+  </TabItem>
+</Tabs>
