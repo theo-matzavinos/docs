@@ -3,4 +3,150 @@ title: Updating state
 description: Updating the Store's state
 template: doc
 ---
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
+The logic for updating state is defined in reducers. Reducers are functions that receive the current state and an action and should return a new value for the state or the same value if there are no changes.
+
+Reducers must be pure functions:
+- they must only use their parameters and no other external values to produce a result
+- they must not mutate their parameters but return a new object if the state needs to be updated
+
+## createReducer
+
+We define a reducer that manages a part of the app's state with the `createReducer` function. It accepts an initialValue for this part of the app's state and 1 or more action handlers defined with the `on` function. The `on` function accepts 1 or more actions and a function that receives the current state value and the action that was dispatched and is responsible for producing a new value. Each action handler defined with the `on` function is like an `if` or `case` statement.
+
+<Tabs>
+    <TabItem label="basic example">
+        ```ts
+        export type GameState = {
+            player1: number;
+            player2: number;
+        }
+        
+        const initialState: GameState = {
+            player1: 0,
+            player2: 0
+        };
+        
+        export const gameReducer = createReducer(
+            initialState,
+            on(gameActions.player1Scored, (state, action): ScoreState => ({ ...state, player1: state.player1 + action.points })),
+            on(gameActions.player2Scored, (state, action): ScoreState => ({ ...state, player2: state.player2 + action.points })),
+            on(gameActions.reset, (): ScoreState => initialState)
+        );
+        ```
+    </TabItem>
+    <TabItem label="multiple actions handlers">
+        ```ts
+        export type AuthState = {
+            token?: string;
+        }
+
+        const initialState = {};
+
+        export const authReducer = createReducer(
+            initialState,
+            on(loginActions.login, localStorageActions.tokenRestored, (state, action): AuthState => ({ token: action.token })),
+            on(sidenavActions.logout, userDashboardActions.logout, (): AuthState => initialState)
+        );
+        ```
+    </TabItem>
+</Tabs>
+
+## Registering reducers
+
+The state of the application is stored in one large object. We register a reducer to manage a part of that state by defining the key where that part will be stored. So, for example, if we register the `gameReducer` with the `game` key a property `game` will be added to the application state object, which will store a `GameState` value and the `gameReducer` will be responsible for updating it.
+
+:::note
+It is best to create a variable with the key in the same file as the reducer and export it.
+
+```ts
+    export type GameState = {
+    player1: number;
+    player2: number;
+}
+
+const initialState: GameState = {
+    player1: 0,
+    player2: 0
+};
+
+export const gameReducer = createReducer(
+    initialState,
+    on(gameActions.player1Scored, (state, action): ScoreState => ({ ...state, player1: state.player1 + action.points })),
+    on(gameActions.player2Scored, (state, action): ScoreState => ({ ...state, player2: state.player2 + action.points })),
+    on(gameActions.reset, (): ScoreState => initialState)
+);
+
+export const gameFeatureKey = 'game';
+```
+:::
+
+### Registering feature state
+
+We can register our state (key and reducer) as a feature if it is only needed for a specific part of our application. This pairs great with lazy-loaded modules.
+
+:::note
+This is the preferred method unless the state needs to be available as soon as the application starts.
+:::
+
+<Tabs>
+    <TabItem label="Standalone API">
+        ```ts
+        import { provideState } from '@ngrx/store';
+
+        export const routes: Route[] = [
+            {
+                path: 'game',
+                providers: [
+                    provideState({ name: gameFeatureKey, reducer: gameReducer })
+                ],
+                component: GameComponent
+            }
+        ];
+        ```
+    </TabItem>
+    <TabItem label="NgModule API">
+        ```ts
+        import { StoreModule } from '@ngrx/store';
+        
+        @NgModule({
+            imports: [
+                StoreModule.forFeature(gameFeatureKey, gameReducer)
+            ],
+        })
+        export class GameModule {}
+        ```
+    </TabItem>
+</Tabs>
+
+### Registering root state
+
+Registering our state (key and reducer) as root ensures that the state is defined when the application starts. We do this when the part of state needs to be always available to all parts of the application (eg. authentication state).
+
+<Tabs>
+    <TabItem label="Standalone API">
+        ```ts
+        import { provideStore, provideState } from '@ngrx/store';
+
+        bootstrapApplication(AppComponent, {
+            providers: [
+                provideStore(),
+                provideState({ name: authFeatureKey, reducer: authReducer })
+            ],
+        });
+        ```
+    </TabItem>
+    <TabItem label="NgModule API">
+        ```ts
+        import { StoreModule } from '@ngrx/store';
+
+        @NgModule({
+            imports: [
+                StoreModule.forRoot({ [authFeatureKey]: authReducer })
+            ],
+        })
+        export class AppModule {}
+        ```
+    </TabItem>
+</Tabs>

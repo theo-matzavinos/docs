@@ -101,14 +101,14 @@ Even if multiple sources dispatch the same action we should create a separate ac
 export const navigationMenuActions = createActionGroup({
   source: 'Navigation Menu',
   events: {
-    'Logged Out': emptyProps(),
+    'Logout': emptyProps(),
   },
 });
 
 export const userDashboardActions = createActionGroup({
   source: 'User Dashboard',
   events: {
-    'Logged Out': emptyProps(),
+    'Logout': emptyProps(),
   },
 });
 ```
