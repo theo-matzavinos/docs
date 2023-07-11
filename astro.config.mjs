@@ -35,6 +35,19 @@ export default defineConfig({
             },
           ],
         },
+        {
+          label: "Store",
+          items: [
+            {
+              label: "Introduction",
+              link: "store",
+            },
+            {
+              label: "Side effects",
+              link: "store/side-effects",
+            },
+          ],
+        },
       ],
     }),
     tailwind(),

@@ -148,7 +148,7 @@ export type MyComponentState = {
 
 @Injectable()
 export class MyComponentStore extends ComponentStore<MyComponentState> {
-  pageSizeFromUrl$: Observable<{ pageSize }> =
+  pageSizeFromUrl$: Observable<{ pageSize: number }> =
     this.activaterRoute.queryParamMap.pipe(
       map((queryParamMap) => getPageSizeQueryParam(queryParamMap)) // pseudocode
     );

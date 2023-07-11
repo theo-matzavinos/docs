@@ -4,6 +4,197 @@ description: Component Store intro
 template: doc
 ---
 
-# What is a side effect
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-An effect is any piece of logic that doesn't update state synchronously or at all. Some examples are: making network calls, interacting with localStorage, starting a timer, logging to the console, opening a dialog.
+A side effect is any piece of logic that doesn't update state synchronously or at all. Some examples are: making network calls, interacting with localStorage, starting a timer, logging to the console, opening a dialog.
+
+## effect
+
+The effect method takes a function with an observable of input values and returns an observable that the ComponentStore subscribes to automatically to run our side effect flow.
+We need to handle errors (eg. with `catchError`) otherwise the effect will stop accepting new values.
+
+<Tabs>
+    <TabItem label="my-component.store.ts">
+        ```ts
+        export type MyComponentState = {
+            myItems: MyItem[];
+            totalItems: number;
+            pageSize: number;
+        };
+        
+        @Injectable()
+        export class MyComponentStore extends ComponentStore<MyComponentState> {
+            constructor(private myItemsApiService: MyItemsApiService) {
+                super({ myItems: [], totalItems: 0, pageSize: 10 });
+            }
+        
+            loadPage = this.effect<number>((page$) =>
+                page$.pipe(
+                    switchMap((page) =>
+                        this.myItemsApiService.getMyItems(page).pipe(
+                            tap((myItems) => {
+                                // save result to state
+                                this.patchState({ myItems });
+                            }),
+                            // this is necessary
+                            catchError((error: HttpErrorResponse) => {
+                                handleHttpErrorSomehow(error);
+        
+                                // if we don't care about a fallback value we can return the EMPTY observable
+                                return EMPTY;
+                            })
+                        )
+                    )
+                )
+            );
+        }
+        ```
+    </TabItem>
+    <TabItem label="my-component.component.ts">
+    ```ts
+    @Component({
+        selector: "my-component",
+        providers: [MyComponentStore],
+        template: `my-component works!`,
+    })
+    export class MyComponent {
+        pageFromUrl$: Observable<number> =this.activaterRoute.queryParamMap.pipe(
+            map((queryParamMap) => getPageQueryParam(queryParamMap)) // pseudocode
+        );
+    
+        constructor(private myComponentStore: MyComponentStore) {
+            // we can call the effect with an observable
+            // and the flow will re-run whenever the observable emits a new value
+            this.myComponentStore.loadPage(this.pageFromUrl$);
+        }
+    
+        someEventHandler() {
+            // we can call the effect with simple values
+            this.myComponentStore.loadPage(12);
+        }
+    }
+    ```
+    </TabItem>
+</Tabs>
+
+## tapResponse
+
+Since handling errors is necessary and the `tap(success), catchError(error)` is the most common pattern we can use the `tapResponse` operator to simplify this. This operator combines the other two operator and the returns the `EMPTY` observable in the error branch automatically.
+
+```ts
+import { ComponentStore, tapResponse } from "@ngrx/component-store";
+
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+  pageSize: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  constructor(private myItemsApiService: MyItemsApiService) {
+    super({ myItems: [], totalItems: 0, pageSize: 10 });
+  }
+
+  loadPage = this.effect<number>((page$) =>
+    page$.pipe(
+      switchMap((page) =>
+        this.myItemsApiService.getMyItems(page).pipe(
+          tapResponse(
+            (myItems) => {
+              this.patchState({ myItems });
+            },
+            (error: HttpErrorResponse) => {
+              handleHttpErrorSomehow(error);
+
+              // we don't need return EMPTY; here
+            }
+          )
+        )
+      )
+    )
+  );
+}
+```
+
+## Calling effects without parameters
+
+We can create effects that don't need an input value by setting the generic to `void`. Our callback function will receive an observable that emits new values whenever the effect is called but the values will be `undefined`.
+
+:::note
+For consistency we should name this observable `trigger$`.
+:::
+
+```ts
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+  pageSize: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  constructor(private myItemsApiService: MyItemsApiService) {
+    super({ myItems: [], totalItems: 0, pageSize: 10 });
+  }
+
+  reload = this.effect<void>((trigger$) =>
+    trigger$.pipe(
+      switchMap(() =>
+        this.myItemsApiService.getMyItems().pipe(
+          tapResponse(
+            (myItems) => {
+              this.patchState({ myItems });
+            },
+            (error: HttpErrorResponse) => {
+              handleHttpErrorSomehow(error);
+            }
+          )
+        )
+      )
+    )
+  );
+}
+```
+
+## Using values from state
+
+If we need some other value from state (or any other observable) we can use the `concatLatestFrom` operator from `@ngrx/effects`. [See also](../../store/side-effects/#concatLatestFrom).
+
+```ts
+import { concatLatestFrom } from "@ngrx/effects";
+import { ComponentStore, tapResponse } from "@ngrx/component-store";
+
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+  pageSize: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  pageSize$ = this.select((state) => state.pageSize);
+
+  constructor(private myItemsApiService: MyItemsApiService) {
+    super({ myItems: [], totalItems: 0, pageSize: 10 });
+  }
+
+  loadPage = this.effect<number>((page$) =>
+    page$.pipe(
+      concatLatestFrom(() => this.pageSize$),
+      switchMap(([page, pageSize]) =>
+        this.myItemsApiService.getMyItems(page, pageSize).pipe(
+          tapResponse(
+            (myItems) => {
+              this.patchState({ myItems });
+            },
+            (error: HttpErrorResponse) => {
+              handleHttpErrorSomehow(error);
+            }
+          )
+        )
+      )
+    )
+  );
+}
+```

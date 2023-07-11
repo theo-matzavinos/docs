@@ -15,30 +15,33 @@ The recommended approach is to create a service that extends the ComponentStore 
 <Tabs>
 	<TabItem label="my-component.store.ts">
 		```ts
-		export type MyComponentState = {
-			myItems: MyItem[];
-		};
-		
-		// no { providedIn: 'root' } here
-		@Injectable()
-		export class MyComponentStore extends ComponentStore<MyComponentState> {
-			constructor() {
-				// IMPORTANT initialize state
-				super({ myItems: [] });
-			}
-		}
-		```
-	</TabItem>
-	<TabItem label="my-component.component.ts">
-		```ts
-		@Component({
-			selector: "my-component",
-			providers: [MyComponentStore],
-			template: `my-component works!`,
-		})
-		export class MyComponent {
-			constructor(private myComponentStore: MyComponentStore) {}
-		}
-		```
-	</TabItem>
+		import { ComponentStore } from '@ngrx/component-store';
+
+    	export type MyComponentState = {
+    		myItems: MyItem[];
+    	};
+
+    	// no { providedIn: 'root' } here
+    	@Injectable()
+    	export class MyComponentStore extends ComponentStore<MyComponentState> {
+    		constructor() {
+    			// IMPORTANT initialize state
+    			super({ myItems: [] });
+    		}
+    	}
+    	```
+    </TabItem>
+    <TabItem label="my-component.component.ts">
+    	```ts
+    	@Component({
+    		selector: "my-component",
+    		providers: [MyComponentStore],
+    		template: `my-component works!`,
+    	})
+    	export class MyComponent {
+    		constructor(private myComponentStore: MyComponentStore) {}
+    	}
+    	```
+    </TabItem>
+
 </Tabs>
