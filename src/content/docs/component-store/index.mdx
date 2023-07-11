@@ -1,12 +1,12 @@
 ---
 title: Introduction
-description: Component Store intro
+description: Introduction to ComponentStore
 template: doc
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-ComponentStore is a class/service that helps to manage local/component state. Its methods accept both simple values and observables which allows us to use observables in a component without having to manage subscriptions manually.
+ComponentStore is a class/service that helps to manage local/component state. Its methods accept both simple values and observables which allows us to use observables in a component without having to manage subscriptions manually. We use it for state that is not shared between components (except children components) and is not persisted between navigations (it is destroyed with the component).
 
 ## How to instantiate
 
