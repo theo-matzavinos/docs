@@ -13,7 +13,24 @@ export default defineConfig({
       sidebar: [
         {
           label: "Component Store",
-          autogenerate: { directory: "component-store" },
+          items: [
+            {
+              label: "Introduction",
+              link: "component-store",
+            },
+            {
+              label: "Reading state",
+              link: "component-store/reading-state",
+            },
+            {
+              label: "Updating state",
+              link: "component-store/updating-state",
+            },
+            {
+              label: "Side effects",
+              link: "component-store/side-effects",
+            },
+          ],
         },
       ],
     }),

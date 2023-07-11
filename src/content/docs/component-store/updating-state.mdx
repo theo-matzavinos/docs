@@ -4,17 +4,19 @@ description: Component Store intro
 template: doc
 ---
 
-# setState
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-**setState** is the simplest way to update the state. It accepts either an object or an update function. The resulting new value must be a new object (`previousState !== currentState` must be **true** see [Selector value equality](component-store/Reading%20state#Selector%20value%20equality)). The resulting object must be a complete instance of our state as it will **replace** the previous value.
+## setState
 
-> [!warning] >**setState** is simple to use but it's easy to make mistakes. Try to avoid using it.
+`setState` is the simplest way to update the state. It accepts either an object or an update function. The resulting new value must be a new object (`previousState !== currentState` must be `true` see [Selector value equality](component-store/reading-state/#selector-value-equality)). The resulting object must be a complete instance of our state as it will **replace** the previous value.
 
-We can call **setState** with a complete object of the state to replace the value of the store's state.
+:::caution
+`setState` is simple to use but it's easy to make mistakes. Try to avoid using it.
+:::
+
+We can call `setState` with a complete object of the state to replace the value of the store's state.
 
 ```typescript
-// my-component.store.ts
-
 export type MyComponentState = {
   myItems: MyItem[];
   totalItems: number;
@@ -27,35 +29,14 @@ export class MyComponentStore extends ComponentStore<MyComponentState> {
     super({ myItems: [], totalItems: 0, pageSize: 10 });
   }
 
-  changeState(state: MyComponentState) {
-    // state will become the new value
+  changeState(newState: MyComponentState) {
+    // newState will become the new value
     this.setState(state);
-  }
-}
-
-// my-component.component.ts
-
-@Component({
-  selector: "my-component",
-  providers: [MyComponentStore],
-  template: `my-component works!`,
-})
-export class MyComponent {
-  state$ = this.myComponentStore.state$; // Observable<MyComponentState>
-
-  constructor(private myComponentStore: MyComponentStore) {}
-
-  someEventHandler() {
-    this.myComponentStore.changeState({
-      myItems: [{ id: 1, title: "Item 1" }],
-      totalItems: 4,
-      pageSize: 20,
-    });
   }
 }
 ```
 
-**setState** also accepts a function which receives the current value of the state and should return a new one.
+`setState` also accepts a function which receives the current value of the state and should return a new one.
 
 ```typescript
 export type MyComponentState = {
@@ -81,78 +62,82 @@ export class MyComponentStore extends ComponentStore<MyComponentState> {
 }
 ```
 
-# updater
+## updater
 
-The **updater** method takes a function that accepts the current state and some value as arguments and should return a new state object. This is mainly used for exposing methods we can call from the component to update the state. The function that is returned from **updater** accepts simple values or observables so we can call it with an observable that will be automatically subscribed and re-run our update function whenever it receives a new value.
+The `updater` method takes a function that accepts the current state and some value as arguments and should return a new state object. This is mainly used for exposing methods we can call from the component to update the state. The function that is returned from `updater` accepts simple values or observables so we can call it with an observable that will be automatically subscribed and re-run our update function whenever it receives a new value.
 
-```typescript
-// my-component.store.ts
-
-export type MyComponentState = {
-  myItems: MyItem[];
-  totalItems: number;
-  pageSize: number;
-};
-
-export type ChangePageSizeAndTotalItems = {
-  pageSize: number;
-  totalItems: number;
-};
-
-@Injectable()
-export class MyComponentStore extends ComponentStore<MyComponentState> {
-  constructor() {
-    super({ myItems: [], totalItems: 0, pageSize: 10 });
-  }
-
-  // this is the same as the previous example
-  changePageSize = this.updater<number>((state, pageSize) => ({
-    ...state,
-    pageSize,
-  }));
-
-  // we can update any piece of the state we need
-  removeItem = this.updater<number>((state, itemId) => ({
-    ...state,
-    totalItems: state.totalItems - 1,
-    myItems: state.myItems.filter((item) => item.id !== itemId),
-  }));
-
-  // we can accept any kind of value we need
-  changePageSizeAndTotalItems = this.updater<ChangePageSizeAndTotalItems>(
-    (state, { pageSize, totalItems }) => ({
-      ...state,
-      pageSize,
-      totalItems,
+<Tabs>
+  <TabItem label="my-component.store.ts">
+    ```typescript
+    export type MyComponentState = {
+      myItems: MyItem[];
+      totalItems: number;
+      pageSize: number;
+    };
+    
+    export type ChangePageSizeAndTotalItems = {
+      pageSize: number;
+      totalItems: number;
+    };
+    
+    @Injectable()
+    export class MyComponentStore extends ComponentStore<MyComponentState> {
+      constructor() {
+        super({ myItems: [], totalItems: 0, pageSize: 10 });
+      }
+    
+      // this is equivalent to the previous example
+      // but it now also accepts observables
+      changePageSize = this.updater<number>((state, pageSize) => ({
+        ...state,
+        pageSize,
+      }));
+    
+      // we can update any piece of the state we need
+      removeItem = this.updater<number>((state, itemId) => ({
+        ...state,
+        totalItems: state.totalItems - 1,
+        myItems: state.myItems.filter((item) => item.id !== itemId),
+      }));
+    
+      // we can accept any kind of value we need
+      changePageSizeAndTotalItems = this.updater<ChangePageSizeAndTotalItems>(
+        (state, { pageSize, totalItems }) => ({
+          ...state,
+          pageSize,
+          totalItems,
+        })
+      );
+    }
+    ```
+  </TabItem>
+  <TabItem label="my-component.component.ts">
+    ```typescript
+    @Component({
+      selector: "my-component",
+      providers: [MyComponentStore],
+      template: `my-component works!`,
     })
-  );
-}
+    export class MyComponent {
+      someExternalPageSize$: Observable<number>;
+    
+      constructor(private myComponentStore: MyComponentStore) {
+        // myComponentStore.changePageSize will subscribe to someExternalPageSize$
+        // and re-run whenever it receives a new value
+        this.myComponentStore.changePageSize(this.someExternalPageSize$);
+      }
+    
+      someEventHandler() {
+        this.myComponentStore.changePageSize(12);
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
 
-// my-component.component.ts
+## patchState
 
-@Component({
-  selector: "my-component",
-  providers: [MyComponentStore],
-  template: `my-component works!`,
-})
-export class MyComponent {
-  someExternalPageSize$: Observable<number>;
-
-  constructor(private myComponentStore: MyComponentStore) {
-    // myComponentStore.changePageSize will subscribe to someExternalPageSize$
-    // and re-run whenever it receives a new value
-    this.myComponentStore.changePageSize(this.someExternalPageSize$);
-  }
-
-  someEventHandler() {
-    this.myComponentStore.changePageSize(12);
-  }
-}
-```
-
-# patchState
-
-**patchState** is used for partial updates. We call it with a partial object of our state, an observable that emits partial object of state or a function that returns a partial object of state. Unlike [setState](setState) we don't need to copy the previous state as this is done for us behind the scenes.
+`patchState` is used for partial updates. We call it with a partial object of our state, an observable that emits partial object of state or a function that returns a partial object of state. Unlike [setState](#setstate) we don't need to copy the previous state as this is done for us behind the scenes.
 
 ```typescript
 export type MyComponentState = {
@@ -163,10 +148,10 @@ export type MyComponentState = {
 
 @Injectable()
 export class MyComponentStore extends ComponentStore<MyComponentState> {
-  pageSizeFromUrl$: Observable<{ pageSize }> = this.activaterRoute.queryParamMap
-    .pipe
-    // get pageSize from queryParams
-    ();
+  pageSizeFromUrl$: Observable<{ pageSize }> =
+    this.activaterRoute.queryParamMap.pipe(
+      map((queryParamMap) => getPageSizeQueryParam(queryParamMap)) // pseudocode
+    );
 
   constructor(private activatedRoute: ActivatedRoute) {
     super({ myItems: [], totalItems: 0, pageSize: 10 });

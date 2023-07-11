@@ -4,50 +4,56 @@ description: Component Store intro
 template: doc
 ---
 
-# ComponentStore.state$
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-The ComponentStore's **state$** property is an observable that contains the whole state object we are managing in the service.
+## ComponentStore.state$
 
-```typescript
-// my-component.store.ts
+The ComponentStore's `state$` property is an observable that contains the whole state object we are managing in the service.
 
-export type MyComponentState = {
-  myItems: MyItem[];
-  totalItems: number;
-};
+<Tabs>
+  <TabItem label="my-component.store.ts">
+    ```typescript
+    export type MyComponentState = {
+      myItems: MyItem[];
+      totalItems: number;
+    };
 
-@Injectable()
-export class MyComponentStore extends ComponentStore<MyComponentState> {
-  constructor() {
-    super({ myItems: [], totalItems: 0 });
-  }
-}
+    @Injectable()
+    export class MyComponentStore extends ComponentStore<MyComponentState> {
+      constructor() {
+        super({ myItems: [], totalItems: 0 });
+      }
+    }
+    ```
 
-// my-component.component.ts
+  </TabItem>
+  <TabItem label="my-component.component.ts">
+    ```typescript
+    @Component({
+      selector: "my-component",
+      providers: [MyComponentStore],
+      template: `my-component works!`,
+    })
+    export class MyComponent {
+      state$ = this.myComponentStore.state$; // Observable<MyComponentState>
+    
+      constructor(private myComponentStore: MyComponentStore) {}
+    }
+    ```
+  </TabItem>
+</Tabs>
 
-@Component({
-  selector: "my-component",
-  providers: [MyComponentStore],
-  template: `my-component works!`,
-})
-export class MyComponent {
-  state$ = this.myComponentStore.state$; // Observable<MyComponentState>
+## ComponentStore.select()
 
-  constructor(private myComponentStore: MyComponentStore) {}
-}
-```
-
-# ComponentStore.select()
-
-Using the **state$** property will cover most simple cases but if we need to compute values based on the current state we use the **select** method.
+Using the `state$` property will cover most simple cases but if we need to compute values based on the current state we use the `select` method.
 
 ### Selector value equality
 
-The **select** method uses the default equality check (`===`) to check whether a selector's value has changed. If `previousValue === currentValue` the selector will not emit for `currentValue`.
+The selectors use the default equality check (`===`) to check whether their value has changed. If `previousValue === currentValue` the selector will not emit for `currentValue`.
 
-## Selecting state properties
+### Selecting state properties
 
-The simplest way to use **select** is to call it with a function which accepts the state object as its argument and returns the value that we want to select. This gives us an observable that emits new values when the value that our function returns changes.
+The simplest way to use `select` is to call it with a function which accepts the state object as its argument and returns the value that we want to select. This gives us an observable that emits new values when the value that our function returns changes.
 
 ```typescript
 export type MyComponentState = {
@@ -66,9 +72,9 @@ export class MyComponentStore extends ComponentStore<MyComponentState> {
 }
 ```
 
-## Computing derived values
+### Computing derived values
 
-While we can use the way described above to compute derived values it can become expensive (performance-wise) since the function we provide to **select** will run every time the state changes even when that change does not affect the result of our function.
+While we can use the way described above to compute derived values it can become expensive (performance-wise) since the function we provide to `select` will run every time the state changes even when that change does not affect the result of our function.
 
 ```typescript
 export type MyComponentState = {
@@ -89,7 +95,7 @@ export class MyComponentStore extends ComponentStore<MyComponentState> {
 }
 ```
 
-To fix this problem we can use the other form of **select** which takes other selectors (or any observable) as inputs and a function which accepts the values of those input selectors as arguments.
+To fix this problem we can use the other form of `select` which takes other selectors (or any observable) as inputs and a function which accepts the values of those input selectors as arguments.
 
 ```typescript
 export type MyComponentState = {
@@ -115,7 +121,7 @@ export class MyComponentStore extends ComponentStore<MyComponentState> {
 }
 ```
 
-## ViewModel pattern
+### ViewModel pattern
 
 The recommended approach is to group all the properties we need in the component in a single selector. We do this to minimize the amount of subscriptions we create in the template (only one AsyncPipe necessary in the template).
 
@@ -161,7 +167,7 @@ export class MyComponent {
 }
 ```
 
-We can use the form of **select** described in the previous section to combine the selectors but we can simplify this by calling **select** with a record of selectors (or any observable).
+We can use the form of `select` described in the previous section to combine the selectors but we can simplify this by calling it with a record of selectors (or any observable).
 
 ```typescript
 export type MyComponentState = {
@@ -202,11 +208,11 @@ export class MyComponentStore extends ComponentStore<MyComponentState> {
 }
 ```
 
-## Debounce
+### Debounce
 
 Selectors are synchronous by default, meaning that they emit the value immediately when subscribed to, and on every state change.
 
-So in our last example if **pageSize**'s value changes **viewModel$** will emit 2 new values. One for the change in **pageSize\$** and one for the change in **pages\$**.
+So in our last example if `pageSize`'s value changes `viewModel$` will emit 2 new values. One for the change in `pageSize$` and one for the change in `pages$`.
 
 1. Assuming our initial state is:
 
@@ -217,8 +223,8 @@ So in our last example if **pageSize**'s value changes **viewModel$** will emit 
 }
 ```
 
-2. When **pageSize** changes to 20
-3. **viewModel\$** first emits an incomplete value
+2. When `pageSize` changes to 20
+3. `viewModel$` first emits an incomplete value
 
 ```typescript
 {
@@ -238,10 +244,11 @@ So in our last example if **pageSize**'s value changes **viewModel$** will emit 
 }
 ```
 
-We can fix that by setting **debounce: true** on the selector so the incomplete value in step 3 will not be emitted.
+We can fix that by setting `debounce: true` on the selector so the incomplete value in step 3 will not be emitted.
 
-> [!info]
-> It's recommended to set **debounce: true** on the **viewModel$** selector
+:::note
+It's recommended to set `debounce: true` on the `viewModel$` selector
+:::
 
 ```typescript
 export type MyComponentState = {
