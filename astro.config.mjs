@@ -10,6 +10,9 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Docs",
+      social: {
+        github: "https://github.com/theo-matzavinos/docs",
+      },
       sidebar: [
         {
           label: "Component Store",
