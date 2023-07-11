@@ -1,0 +1,114 @@
+---
+title: Actions
+description: Store actions
+template: doc
+---
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Actions describe unique events that happen in the application. All actions have a `type` property which must be unique with the format `[Event Source] Event Name`.
+
+## createAction
+
+The simplest way to create an action is to use the `createAction` function. It requires a string that defines the `type` of the action. This returns a function that when called returns instances of this action.
+
+```ts
+import { createAction } from '@ngrx/store';
+
+export const someAction = createAction('[Event Source] Some Action');
+```
+
+Actions usually have additional data needed for handling it. We use the `props` function to define the shape of that data.
+
+:::caution
+The additional data must always be an object since it will be merged with the base action object.
+:::
+
+<Tabs>
+    
+    <TabItem label="example">
+        ```ts
+        import { createAction, props } from '@ngrx/store';
+        
+        export const login = createAction(
+          '[Login Page] Login',
+          props<{ username: string; password: string }>()
+        );
+        ```
+    </TabItem>
+    <TabItem label="pseudocode">
+        ```ts
+        // createAction and props work somewhat like this
+        export const login = (props: { username: string; password: string }) => {
+            return {
+                type: '[Login Page] Login',
+                ...props
+            }
+        }
+        ```
+    </TabItem>
+</Tabs>
+
+We can then use this in a component or service.
+
+```ts
+@Component({...})
+export class LoginComponent {
+    ...
+    login(username: string, password: string) {
+        this.store.dispatch(login({ username, password }));
+    }
+}
+```
+
+## createActionGroup
+
+Creating a lot of actions, especially for the same source, can become tedious. The `createActionGroup` function simplifies that process. It accepts the source as a string and a record of event names and their properties. For actions that don't need properties we use the `emptyProps` function.
+
+:::note
+`createActionGroup` is preferred over `createAction` even when creating a single action for a source. This makes it easier to add actions later.
+:::
+
+```ts
+import { createActionGroup, emptyProps, props } from '@ngrx/store';
+
+export const productsPageActions = createActionGroup({
+  source: 'Products Page',
+  events: {
+    'Opened': emptyProps(),
+    'Pagination Changed': props<{ page: number; pageSize: number }>(),
+  },
+});
+
+// Result
+//
+// productsPageActions: {
+//     opened: () => { type: '[Products Page] Opened' },
+//     paginationChanged: (props: { page: number; pageSize: number }) => { type: '[Products Page] Opened', page: number; pageSize: number },
+// }
+```
+
+## Guidelines
+
+In general actions should represent a unique event and should not be reused - the action should be identifiable by its type, not its data.
+
+Actions should represent events and not commands. We are saying that something happened, not requesting for something to happen.
+
+Even if multiple sources dispatch the same action we should create a separate action for each source. This helps with debugging and makes it easier to have different handling for the actions later if necessary.
+
+```ts
+// these might look like the same event but they're not
+
+export const navigationMenuActions = createActionGroup({
+  source: 'Navigation Menu',
+  events: {
+    'Logged Out': emptyProps(),
+  },
+});
+
+export const userDashboardActions = createActionGroup({
+  source: 'User Dashboard',
+  events: {
+    'Logged Out': emptyProps(),
+  },
+});
+```

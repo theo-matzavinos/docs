@@ -13,6 +13,35 @@ export default defineConfig({
       },
       sidebar: [
         {
+          label: "Store",
+          items: [
+            {
+              label: "Introduction",
+              link: "store",
+            },
+            {
+              label: "Actions",
+              link: "store/actions",
+            },
+            {
+              label: "Reading state",
+              link: "store/reading-state",
+            },
+            {
+              label: "Updating state",
+              link: "store/updating-state",
+            },
+            {
+              label: "Using features",
+              link: "store/using-features",
+            },
+            {
+              label: "Side effects",
+              link: "store/side-effects",
+            },
+          ],
+        },
+        {
           label: "Component Store",
           items: [
             {
@@ -30,19 +59,6 @@ export default defineConfig({
             {
               label: "Side effects",
               link: "component-store/side-effects",
-            },
-          ],
-        },
-        {
-          label: "Store",
-          items: [
-            {
-              label: "Introduction",
-              link: "store",
-            },
-            {
-              label: "Side effects",
-              link: "store/side-effects",
             },
           ],
         },

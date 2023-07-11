@@ -1,7 +1,18 @@
 ---
 title: Introduction
-description: Store intro
+description: Introduction to Store
 template: doc
 ---
 
-TBD
+The Store helps us manage global/shared state. It provides us with a single global object where all application state is stored and it enforces an event-driven approach for updating it. We use it for any piece of state that is shared between components (routes) or must be persisted (not destroyed) between navigations.
+
+## Key concepts
+
+- Actions that describe unique events.
+- Reducers that handle events and update the state.
+- Selectors that are used to read from the store and compute derived values.
+- Effects for logic that doesn't immediately (or at all) affect state.
+
+## Diagram
+
+![Store lifecycle Diagram](https://ngrx.io/generated/images/guide/store/state-management-lifecycle.png)
