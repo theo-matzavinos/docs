@@ -1,0 +1,277 @@
+---
+title: Reading state
+description: Component Store intro
+template: doc
+---
+
+# ComponentStore.state$
+
+The ComponentStore's **state$** property is an observable that contains the whole state object we are managing in the service.
+
+```typescript
+// my-component.store.ts
+
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  constructor() {
+    super({ myItems: [], totalItems: 0 });
+  }
+}
+
+// my-component.component.ts
+
+@Component({
+  selector: "my-component",
+  providers: [MyComponentStore],
+  template: `my-component works!`,
+})
+export class MyComponent {
+  state$ = this.myComponentStore.state$; // Observable<MyComponentState>
+
+  constructor(private myComponentStore: MyComponentStore) {}
+}
+```
+
+# ComponentStore.select()
+
+Using the **state$** property will cover most simple cases but if we need to compute values based on the current state we use the **select** method.
+
+### Selector value equality
+
+The **select** method uses the default equality check (`===`) to check whether a selector's value has changed. If `previousValue === currentValue` the selector will not emit for `currentValue`.
+
+## Selecting state properties
+
+The simplest way to use **select** is to call it with a function which accepts the state object as its argument and returns the value that we want to select. This gives us an observable that emits new values when the value that our function returns changes.
+
+```typescript
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  // this emits new values only when state.totalItems changes
+  totalItems$ = this.select((state) => state.totalItems); // Observable<number>
+
+  constructor() {
+    super({ myItems: [], totalItems: 0 });
+  }
+}
+```
+
+## Computing derived values
+
+While we can use the way described above to compute derived values it can become expensive (performance-wise) since the function we provide to **select** will run every time the state changes even when that change does not affect the result of our function.
+
+```typescript
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+  pageSize: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  // this will run the inner function even if totalItems and pageSize haven't changed
+  // so if we only updated myItems the function will be triggered
+  pages$ = this.select((state) => state.totalItems / state.pageSize);
+
+  constructor() {
+    super({ myItems: [], totalItems: 0, pageSize: 10 });
+  }
+}
+```
+
+To fix this problem we can use the other form of **select** which takes other selectors (or any observable) as inputs and a function which accepts the values of those input selectors as arguments.
+
+```typescript
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+  pageSize: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  totalItems$ = this.select((state) => state.totalItems);
+  pageSize$ = this.select((state) => state.pageSize);
+  pages$ = this.select(
+    this.totalItems$,
+    this.pageSize$,
+    // this will only be called if the value of any of the input selectors changes
+    (totalItems, pageSize) => totalItems / pageSize
+  );
+
+  constructor() {
+    super({ myItems: [], totalItems: 0, pageSize: 10 });
+  }
+}
+```
+
+## ViewModel pattern
+
+The recommended approach is to group all the properties we need in the component in a single selector. We do this to minimize the amount of subscriptions we create in the template (only one AsyncPipe necessary in the template).
+
+Instead of this:
+
+```typescript
+@Component({
+  selector: "my-component",
+  providers: [MyComponentStore],
+  template: `
+    <div>Page size: {{ pageSize$ | async }}</div>
+    <div>Pages: {{ pages$ | async }}</div>
+    <div>Total items: {{ totalItems$ | async }}</div>
+  `,
+})
+export class MyComponent {
+  totalItems$ = this.myComponentStore.totalItems$;
+  pageSize$ = this.myComponentStore.pageSize$;
+  pages$ = this.myComponentStore.pages$;
+
+  constructor(private myComponentStore: MyComponentStore) {}
+}
+```
+
+We want to have this:
+
+```typescript
+@Component({
+  selector: "my-component",
+  providers: [MyComponentStore],
+  template: `
+    <ng-container *ngIf="viewModel$ | async as viewModel">
+      <div>Page size: {{ viewModel.pageSize }}</div>
+      <div>Pages: {{ viewModel.pages }}</div>
+      <div>Total items: {{ viewModel.totalItems }}</div>
+    </ng-container>
+  `,
+})
+export class MyComponent {
+  viewModel$ = this.myComponentStore.viewModel$;
+
+  constructor(private myComponentStore: MyComponentStore) {}
+}
+```
+
+We can use the form of **select** described in the previous section to combine the selectors but we can simplify this by calling **select** with a record of selectors (or any observable).
+
+```typescript
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+  pageSize: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  totalItems$ = this.select((state) => state.totalItems);
+  pageSize$ = this.select((state) => state.pageSize);
+  pages$ = this.select(
+    this.totalItems$,
+    this.pageSize$,
+    (totalItems, pageSize) => totalItems / pageSize
+  );
+  viewModel$ = this.select({
+    totalItems: this.totalItems$,
+    pageSize: this.pageSize$,
+    pages: this.pages$,
+  });
+  // this is the same as the above
+  //viewModel$ = this.select(
+  //	this.totalItems$,
+  //	this.pageSize$,
+  //	this.pages$,
+  //	 (totalItems, pageSize, pages) => ({
+  //		 totalItems,
+  //		 pageSize,
+  //		 pages,
+  //	 })
+  //);
+
+  constructor() {
+    super({ myItems: [], totalItems: 0, pageSize: 10 });
+  }
+}
+```
+
+## Debounce
+
+Selectors are synchronous by default, meaning that they emit the value immediately when subscribed to, and on every state change.
+
+So in our last example if **pageSize**'s value changes **viewModel$** will emit 2 new values. One for the change in **pageSize\$** and one for the change in **pages\$**.
+
+1. Assuming our initial state is:
+
+```typescript
+{
+	totalItems: 100,
+	pageSize: 10
+}
+```
+
+2. When **pageSize** changes to 20
+3. **viewModel\$** first emits an incomplete value
+
+```typescript
+{
+	totalItems: 100,
+	pageSize: 20,
+	pages: 10,
+}
+```
+
+4. and then the complete one
+
+```typescript
+{
+	totalItems: 100,
+	pageSize: 20,
+	pages: 5,
+}
+```
+
+We can fix that by setting **debounce: true** on the selector so the incomplete value in step 3 will not be emitted.
+
+> [!info]
+> It's recommended to set **debounce: true** on the **viewModel$** selector
+
+```typescript
+export type MyComponentState = {
+  myItems: MyItem[];
+  totalItems: number;
+  pageSize: number;
+};
+
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  totalItems$ = this.select((state) => state.totalItems);
+  pageSize$ = this.select((state) => state.pageSize);
+  pages$ = this.select(
+    this.totalItems$,
+    this.pageSize$,
+    (totalItems, pageSize) => totalItems / pageSize
+  );
+  viewModel$ = this.select(
+    {
+      totalItems: this.totalItems$,
+      pageSize: this.pageSize$,
+      pages: this.pages$,
+    },
+    {
+      debounce: true,
+    }
+  );
+
+  constructor() {
+    super({ myItems: [], totalItems: 0, pageSize: 10 });
+  }
+}
+```

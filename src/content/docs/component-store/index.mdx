@@ -1,0 +1,43 @@
+---
+title: Introduction
+description: Component Store intro
+template: doc
+---
+
+# What it is
+
+ComponentStore is a class/service that helps to manage local/component state. Its methods accept both simple values and observables which allows us to use observables in a component without having to manage subscriptions manually.
+
+# How to instantiate
+
+The recommended approach is to create a service that extends the ComponentStore and provide/inject that service in the component. We do this so that the lifecycle of the service is tied to the component's. This means that the service will be instantiated when the component is instantiated, each instance of the component will have its own instance of the service and when the component's instance is destroyed the service's instance will be destroyed as well.
+
+```typescript
+// my-component.store.ts
+
+export type MyComponentState = {
+  myItems: MyItem[];
+};
+
+// no { providedIn: 'root' } here
+@Injectable()
+export class MyComponentStore extends ComponentStore<MyComponentState> {
+  constructor() {
+    // IMPORTANT initialize state
+    super({ myItems: [] });
+  }
+}
+
+// my-component.component.ts
+
+@Component({
+  selector: "my-component",
+  providers: [MyComponentStore],
+  template: `my-component works!`,
+})
+export class MyComponent {
+  constructor(private myComponentStore: MyComponentStore) {}
+}
+```
+
+Up next: 1. [Reading state](component-store/reading-state) 2. [[Updating state]] 3. [[Running side effects]]
