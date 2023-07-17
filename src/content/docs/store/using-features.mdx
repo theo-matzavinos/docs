@@ -5,3 +5,187 @@ template: doc
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Creating [selectors](../reading-state) can become tedious, especially if our state has a lot of properties. For that reason we use the `createFeature` function which automagically creates all the basic selectors for us. We basically combine the [reducer and feature key](../updating-state/#registering-reducers) and [selectors](../reading-state) into one definition.
+
+The `createFeature` function accepts an object containing a feature `name`, a feature `reducer` and optionally a function `extraSelectors`. The `extraSelectors` receives an object with all the basic selectors and should return an object with any extra selector we want to create for this feature.
+
+- The basic selectors that are created by `createFeature` are all prefixed with **select**.
+- The feature state selector has the **State** suffix and uses the feature name we provided (eg. selectAuthState, selectGameState).
+- The property selectors are based on the property names of our state (eg. selectToken, selectPlayer1).
+
+:::note
+This is the recommended way of defining state and selectors.
+:::
+
+## Creating features
+
+With `createFeature` we can simplify the following:
+
+<Tabs>
+    <TabItem label="game.reducer.ts">
+    ```ts
+    export type GameState = {
+        player1: number;
+        player2: number;
+    }
+
+    const initialState: GameState = {
+        player1: 0,
+        player2: 0
+    };
+
+    export const gameReducer = createReducer(
+        initialState,
+        on(gameActions.player1Scored, (state, action): GameState => ({ ...state, player1: state.player1 + action.points })),
+        on(gameActions.player2Scored, (state, action): GameState => ({ ...state, player2: state.player2 + action.points })),
+        on(gameActions.reset, (): GameState => initialState)
+    );
+
+    export const gameFeatureKey = 'game';
+    ```
+    </TabItem>
+    <TabItem label="game.selectors.ts">
+    ```ts
+    export const selectGameState = createFeatureSelector<GameState>(gameFeatureKey);
+
+    export const selectPlayer1Score = createSelector(selectGameState, (gameState) => gameState.player1);
+
+    export const selectPlayer2Score = createSelector(selectGameState, (gameState) => gameState.player2);
+
+    export const selectWinner = createSelector(selectPlayer1Score, selectPlayer2Score, (player1, player2) => {
+        if (player1 > player2) {
+            return 'player 1';
+        }
+
+        if (player1 < player2) {
+            return 'player 2';
+        }
+
+        return 'draw';
+    });
+    ```
+    </TabItem>
+</Tabs>
+
+Into this:
+```ts
+    import { createFeature, createReducer, on } from '@ngrx/store';
+
+    export type GameState = {
+        player1: number;
+        player2: number;
+    }
+
+    const initialState: GameState = {
+        player1: 0,
+        player2: 0
+    };
+
+    export const gameFeature = createFeature({
+        name: 'game',
+        reducer: createReducer(
+            initialState,
+            on(gameActions.player1Scored, (state, action): GameState => ({ ...state, player1: state.player1 + action.points })),
+            on(gameActions.player2Scored, (state, action): GameState => ({ ...state, player2: state.player2 + action.points })),
+            on(gameActions.reset, (): GameState => initialState)
+        ),
+        extraSelectors({ selectPlayer1, selectPlayer2 }) {
+            return {
+                selectWinner: createSelector(selectPlayer1, selectPlayer2, (player1, player2) => {
+                    if (player1 > player2) {
+                        return 'player 1';
+                    }
+
+                    if (player1 < player2) {
+                        return 'player 2';
+                    }
+
+                    return 'draw';
+                }),
+            };
+        }
+    });
+
+    // const gameFeature = {
+    //     name,                <- Feature name ('game')
+    //     reducer,             <- Feature reducer
+    //     selectGameState,     <- Feature state selector. Automatically created.
+    //     selectPlayer1,       <- Property selector. Automatically created.
+    //     selectPlayer2,       <- Property selector. Automatically created.
+    //     selectWinner         <- Extra selector. Created by extraSelectors.
+    // };
+```
+
+## Registering features
+
+<Tabs>
+    <TabItem label="NgModule API">
+    ```ts
+    @NgModule({
+        imports: [StoreModule.forFeature(gameFeature)],
+    })
+    export class GameModule {}
+    ```
+    </TabItem>
+    <TabItem label="Standalone API">
+    ```ts
+    import { provideState } from '@ngrx/store';
+
+    export const routes: Route[] = [
+        {
+            path: 'game',
+            providers: [provideState(gameFeature)]
+        }
+    ];
+    ```
+    </TabItem>
+    <TabItem label="Standalone API (main.ts)">
+    ```ts
+    bootstrapApplication(AppComponent, {
+        providers: [
+            provideStore(),
+            provideState(gameFeature)
+        ],
+    });
+    ```
+    </TabItem>
+</Tabs>
+
+## Using features
+
+```ts
+export class ComponentOrService {
+    winner$ = inject(Store).select(gameFeature.selectWinner);
+}
+```
+
+## Tradeoffs
+
+The `createFeature` function cannot be used for features whose state contains optional properties. In other words, all state properties have to be passed to the initial state object.
+
+So, if the state contains optional properties:
+```ts
+interface State {
+  books: Book[];
+  activeBookId?: string;
+}
+
+const initialState: State = {
+  books: [],
+};
+```
+
+Each optional symbol (`?`) has to be replaced with `| undefined` and the initial value has to be explicitly initialized with `undefined`:
+
+```ts
+interface State {
+  books: Book[];
+  activeBookId: string | undefined;
+}
+
+const initialState: State = {
+  books: [],
+  activeBookId: undefined,
+};
+```

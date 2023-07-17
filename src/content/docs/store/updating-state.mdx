@@ -73,9 +73,9 @@ const initialState: GameState = {
 
 export const gameReducer = createReducer(
     initialState,
-    on(gameActions.player1Scored, (state, action): ScoreState => ({ ...state, player1: state.player1 + action.points })),
-    on(gameActions.player2Scored, (state, action): ScoreState => ({ ...state, player2: state.player2 + action.points })),
-    on(gameActions.reset, (): ScoreState => initialState)
+    on(gameActions.player1Scored, (state, action): GameState => ({ ...state, player1: state.player1 + action.points })),
+    on(gameActions.player2Scored, (state, action): GameState => ({ ...state, player2: state.player2 + action.points })),
+    on(gameActions.reset, (): GameState => initialState)
 );
 
 export const gameFeatureKey = 'game';
