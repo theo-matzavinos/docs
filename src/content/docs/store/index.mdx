@@ -13,6 +13,12 @@ The Store helps us manage global/shared state. It provides us with a single glob
 - Selectors that are used to read from the store and compute derived values.
 - Effects for logic that doesn't immediately (or at all) affect state.
 
+## Services
+
+`Store` is the main service. It's used to dispatch actions with the `dispatch` method and read from state with the `select` method.
+
+`Actions` is basically an observable that emits all the actions dispatched from the `Store`. It's mainly used in [effects](./side-effects).
+
 ## Diagram
 
-![Store lifecycle Diagram](https://ngrx.io/generated/images/guide/store/state-management-lifecycle.png)
+![NGRX lifecycle Diagram](https://ngrx.io/generated/images/guide/store/state-management-lifecycle.png)

@@ -5,3 +5,87 @@ template: doc
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Store.select()
+
+Reading from the store's state is done with the `select` method. It accepts a function that receives the state object and should return the value that we want to read. The `select` method returns an observable that emits the values that the provided function returns.
+
+```ts
+class ComponentOrService {
+    authToken$ = inject(Store).select((state) => state.auth.token);
+}
+```
+
+## Selectors
+
+Using the `select` method with the way described above has problems:
+- `state` will be of type `any`
+- the function will be called for any change to state, even if the part(s) that are used in the function haven't changed
+- reusing and combining the selection functions may become tricky
+- even if we manage to reuse and combine these functions there is no memoization (caching) of their results
+
+To solve these issues we use selectors.
+- They receive values that are correctly typed (no `any`).
+- They only re-run if any of their input values have changed.
+- It's easy to reuse and combine them as it's a built-in feature.
+- Their results are memoized (if their input values haven't changed they return the previous result) so it's inexpensive to call them multiple times. 
+
+### createFeatureSelector
+
+Assuming that we registered a part of state with a key and a reducer (see [Registering reducers](../updating-state/#registering-reducers)) we use the `createFeatureSelector` function to create a selector that selects that part. It accepts the key that we want to select and is generic so we can provide the type of this part of state.
+
+```ts
+// selectAuthState: (state: any) => AuthState
+export const selectAuthState = createFeatureSelector<AuthState>(authFeatureKey);
+```
+
+### createSelector
+
+The `createSelector` function accepts 1 or more selectors and a function that receives the results of those input selectors and returns the value that we want to select.
+
+```ts
+export const selectAuthToken = createSelector(selectAuthState, (authState) => authState.token);
+```
+
+In the example above the type of `authState` will `AuthState`.
+
+We can provide any selector as input (not just the result of `createFeatureSelector`).
+
+```ts
+export const selectUserIsLoggedIn = createSelector(selectAuthToken, (token) => token != null);
+```
+
+We can provide any number of input selectors (at least 1).
+
+```ts
+export type GameState = {
+    player1: number;
+    player2: number;
+}
+
+export const selectGameState = createFeatureSelector<GameState>(gameFeatureKey);
+
+export const selectPlayer1Score = createSelector(selectGameState, (gameState) => gameState.player1);
+
+export const selectPlayer2Score = createSelector(selectGameState, (gameState) => gameState.player2);
+
+export const selectWinner = createSelector(selectPlayer1Score, selectPlayer2Score, (player1, player2) => {
+    if (player1 > player2) {
+        return 'player 1';
+    }
+
+    if (player1 < player2) {
+        return 'player 2';
+    }
+
+    return 'draw';
+})
+```
+
+Finally we can use our selectors in our components/services to read values from state.
+
+```ts
+export class ComponentOrService {
+    winner$ = inject(Store).select(selectWinner);
+}
+```
