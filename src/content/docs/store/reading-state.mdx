@@ -28,7 +28,11 @@ To solve these issues we use selectors.
 - They receive values that are correctly typed (no `any`).
 - They only re-run if any of their input values have changed.
 - It's easy to reuse and combine them as it's a built-in feature.
-- Their results are memoized (if their input values haven't changed they return the previous result) so it's inexpensive to call them multiple times. 
+- Their results are memoized (if their input values haven't changed they return the previous result) so it's inexpensive to call them multiple times.
+
+:::note
+By convention we prefix selector names with **select** (`selectVeryImportantValue` instead of `veryImportantValue`).
+:::
 
 ### createFeatureSelector
 

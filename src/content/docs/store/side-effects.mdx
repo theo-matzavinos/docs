@@ -3,9 +3,322 @@ title: Side effects
 description: TBD
 template: doc
 ---
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-TBD
+A side effect is any piece of logic that doesn't update state synchronously or at all. Some examples are: making network calls, interacting with localStorage, starting a timer, logging to the console, opening a dialog.
 
-Coming soon!
+The `@ngrx/effects` package gives us the building blocks to model these behaviors using observables.
 
-Under construction!
+These effects run **after** the state has been updated:
+1. An action is dispatched from a component.
+2. The reducers update the state based on the action.
+3. The effects receive the action and perform side-effect logic.
+
+## The Actions service
+
+The `Actions` service provides an observable of the actions that are dispatched in the application. This gives us the ability to create effects that react to actions being dispatched and perform our side-effect login whenever an action is dispatched.
+
+Along with this service we also have the `ofType` rxjs operator which can be used to filter the actions based on their type.
+
+<Tabs>
+    <TabItem label="some.effects.ts">
+        ```ts
+        import { Actions, ofType } from '@ngrx/effects'
+
+        @Injectable()
+        export class SomeEffects {
+            allActions$ = this.actions; // Observable of all actions
+            somethingHappenedActions$ = this.actions.pipe(ofType(someActions.somethingHappened)); // Observable of only someActions.somethingHappened
+
+            constructor(private actions: Actions) {}
+        }
+        ```
+    </TabItem>
+    <TabItem label="some.actions.ts">
+        ```ts
+        export const someActions = createActionGroup({
+            source: 'Some',
+            events: {
+                'Something Happened': emptyProps()
+            }
+        });
+        ```
+    </TabItem>
+</Tabs>
+
+## createEffect
+
+The `createEffect` function is used to define side-effect logic. It accepts a function that should return an observable and an optional configuration object.
+
+In most cases, effects will:
+- react to some action that was dispatched using the [Actions](#the-actions-service) service
+- return an observable of actions to be dispatched
+
+However, there are not hard rules, since:
+- the trigger could be any observable
+- by providing a configuration object with `dispatch` set to `false` we can return observables that don't dispatch actions.
+
+:::note
+It is important we handle errors in our effects as any uncaught error will kill the effect. We must return an observable of actions in `catchError` or use the `EMPTY` observable.
+:::
+
+```ts
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { timer, switchMap, map, catchError, of } from 'rxjs';
+
+// no { providedIn: 'root' } here
+@Injectable()
+export class SomeEffects {
+    loadSomething$ = createEffect(() => {
+        // reacting to someActions.loadSomething
+        return this.actions.pipe(
+            ofType(someActions.loadSomething),
+            switchMap((action) => 
+                this.someApiService.load().pipe(
+                    // return observable of actions
+                    map((result) => someActions.loadSomethingSuccess({ result})),
+                    catchError((error) => of(someActions.loadSomethingError({ error })))
+                )
+            )
+        );
+    });
+
+    annoyUser$ = createEffect(() => {
+        // reacting to timer observable
+        return timer(5000).pipe(
+            // return observable of actions
+            map((count) => someActions.annoyUser({ count }))
+        );
+    });
+
+    logErrors$ = createEffect(() => {
+        return this.actions.pipe(
+            ofType(someActions.loadSomethingError),
+            // we don't want to return actions here
+            tap((action) => { console.error(action.error) })
+        );
+    }, {
+        // so we set dispatch to false
+        dispatch: false
+    });
+
+    constructor(private actions: Actions) {}
+}
+```
+
+## Registering effects
+
+As noted in the example above we dont use `{ providedIn: 'root' }` to register our effects. That is done through the `@ngrx/effect` API.
+
+Effects start running immediately after instantiation to ensure they are listening for all relevant actions as soon as possible.
+
+### Registering feature effects
+
+We can register our effects as a feature if they are only needed for a specific part of our application. This pairs great with lazy-loaded modules.
+
+:::note
+This is the preferred method unless the effects need to be up and running as soon as the application starts.
+:::
+
+<Tabs>
+    <TabItem label="Standalone API">
+        ```ts
+        export const routes: Route[] = [
+            {
+                path: 'something',
+                providers: [
+                    provideEffects(SomeEffects, SomeOtherEffects)
+                ]
+            }
+        ];
+        ```
+    </TabItem>
+    <TabItem label="NgModule API">
+        ```ts
+        import { EffectsModule } from '@ngrx/effects';
+
+        @NgModule({
+            imports: [
+                EffectsModule.forFeature(SomeEffects, SomeOtherEffects)
+            ],
+        })
+        export class SomeModule {}
+        ```
+    </TabItem>
+</Tabs>
+
+### Registering root effects
+
+Registering our effects as root ensures that they are instantiated and start running when the application starts. We do this when the effects affect state that is also registered as root (see [Registering root state](../updating-state/#registering-root-state)) or model side-effect logic that is not specific to a feature of the application.
+
+<Tabs>
+    <TabItem label="Standalone API (main.ts)">
+        ```ts
+        import { provideEffects } from '@ngrx/effects';
+
+        bootstrapApplication(AppComponent, {
+            providers: [
+                provideEffects(SomeEffects, SomeOtherEffects),
+            ],
+        });
+        ```
+    </TabItem>
+    <TabItem label="NgModule API">
+        ```ts
+        import { EffectsModule } from '@ngrx/effects';
+        
+        @NgModule({
+            imports: [
+                EffectsModule.forRoot(SomeEffects, SomeOtherEffects),
+            ],
+        })
+        export class AppModule {}
+        ```
+    </TabItem>
+</Tabs>
+
+## concatLatestFrom
+
+Sometimes we might need additional data in our effects which is only available in the `Store`'s state. In these cases we can use the `concatLatestFrom` operator. It accepts a function that receives the value of the trigger observable and should return an observable of the additional values we need. The next operator in the pipe will receive a tuple with the value of the trigger observable and the one returned from `concatLatestFrom`.
+
+```ts
+import { Store } from '@ngrx/store';
+import { Actions, ofType, createEffect, concatLatestFrom } from '@ngrx/effects';
+ 
+@Injectable()
+export class CartEffects {
+  removeSelectedItems$ = createEffect(
+    () => {
+      return this.actions.pipe(
+        ofType(cartActions.removeSelectedItems),
+        concatLatestFrom((action) => this.store.select(cartActions.selectSelectedItems)),
+        switchMap(([action, selectedItems]) => 
+            this.cartApiService.remove(selectedItems).pipe(
+                map(() => cartActions.removeSelectedItemsSuccess({ selectedItems })),
+                catchError((error) => of(cartActions.removeSelectedItemsError({ error })))
+            )
+        )
+      )
+    },
+  );
+ 
+  constructor(
+    private actions: Actions,
+    private store: Store
+  ) {}
+}
+```
+
+## Dispatching multiple actions
+
+In most cases we return a single action as the result of an effect using the `map` operator. If we need to return multiple actions we must change the `map` operator to one of the [join operators](https://rxjs.dev/guide/operators#join-operators) (usually `mergeMap` or `switchMap`) and return an observable of all the actions we want to dispatch using the `from` creation operator.
+
+```ts
+import { mergeMap, from } from 'rxjs';
+
+@Injectable()
+export class SomeEffects {
+  startWorkflow$ = createEffect(
+    () => {
+      return this.actions.pipe(
+        ofType(someActions.startWorkflow),
+        mergeMap(() => 
+            from([
+                someActions.workflowPart1(),
+                someActions.workflowPart2(),
+                someActions.workflowPart3(),
+            ])
+        )
+      )
+    },
+  );
+}
+```
+
+## OnInitEffects
+
+We can implement this interface if we need to dispatch an action as soon as the effects class is registered.
+
+```ts
+class UserEffects implements OnInitEffects {
+  ngrxOnInitEffects(): Action {
+    return userEffectsActions.init();
+  }
+}
+```
+
+## OnRunEffects
+
+By default, effects are subscribed to as soon as they're registered. We can implement the this interface if we need to control when they run.
+
+```ts
+import { exhaustMap, takeUntil, tap } from 'rxjs/operators';
+import {
+  Actions,
+  OnRunEffects,
+  EffectNotification,
+  ofType,
+  createEffect,
+} from '@ngrx/effects';
+
+@Injectable()
+export class SomeEffects implements OnRunEffects {
+    loadSomething$ = createEffect(() => {
+        return this.actions.pipe(
+            ofType(someActions.loadSomething),
+            switchMap((action) => 
+                this.someApiService.load().pipe(
+                    map((result) => someActions.loadSomethingSuccess({ result})),
+                    catchError((error) => of(someActions.loadSomethingError({ error })))
+                )
+            )
+        );
+    });
+
+    annoyUser$ = createEffect(() => {
+        return timer(5000).pipe(
+            map((count) => someActions.annoyUser({ count }))
+        );
+    });
+
+    logErrors$ = createEffect(() => {
+        return this.actions.pipe(
+            ofType(someActions.loadSomethingError),
+            tap((action) => { console.error(action.error) })
+        );
+    }, {
+        dispatch: false
+    });
+
+    constructor(private actions: Actions) {}
+
+    // this controls when the effects defined in this class run
+    ngrxOnRunEffects(resolvedEffects$: Observable<EffectNotification>) {
+        return this.actions.pipe(
+            // effects start running when authActions.loginSuccess is dispatched
+            ofType(authActions.loginSuccess),
+            exhaustMap(() =>
+                resolvedEffects$.pipe(
+                    // effects stop running when authActions.logout is dispatched
+                    takeUntil(this.actions$.pipe(ofType(authActions.logout)))
+                )
+            )
+        );
+    }
+}
+```
+
+## OnIdentifyEffects
+
+By default, effects are only instantiated once even if we register them in multiple places. We can implement this interface if we want to create copies for each registration.
+
+```ts
+class EffectWithIdentifier implements OnIdentifyEffects {
+    constructor(private effectIdentifier: string) {}
+
+    ngrxOnIdentifyEffects() {
+        // this will create one copy per unique effectIdentifier value
+        return this.effectIdentifier;
+    }
+}
+```
