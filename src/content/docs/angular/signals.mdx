@@ -1,0 +1,400 @@
+---
+title: Angular signals
+description: Using the Angular signals API
+template: doc
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+The signals API is in preview as of Angular v16. This means that the API is not complete yet and there might be changes in the underlying implementation but it is in a good-enough state to start experimenting with.
+
+## What are signals?
+
+A signal is a wrapper around a value that can notify interested consumers when that value changes. Signals can contain any value, from simple primitives to complex data structures.
+
+A signal's value is always read through a getter function, which allows Angular to track where the signal is used.
+
+Signals may be either writable or read-only.
+
+## Writable signals
+
+Writable signals provide an API for updating their values directly. You create writable signals by calling the `signal` function with the signal's initial value:
+
+```ts
+import { signal } from '@angular/core';
+
+const count = signal(0);
+
+// Signals are getter functions - calling them reads their value.
+console.log('The count is: ' + count());
+```
+
+To change the value of a writable signal, you can call the `set` method to give it a new value:
+
+```ts
+count.set(3);
+```
+
+Alternatively, if you need to calculate the new value based from the previous one, you can use the `update` method:
+
+```ts
+// Increment the count by 1.
+count.update(value => value + 1);
+```
+
+If the signal contains a non-primitive value (object, array, etc) you can use the `mutate` method to directly mutate that value.
+
+```ts
+const todos = signal([{title: 'Learn signals', done: false}]);
+
+todos.mutate((value) => {
+    // Change the first TODO in the array to 'done: true' without replacing it.
+    value[0].done = true;
+});
+
+todos.mutate((value) => {
+    // push a new TODO
+    value.push({ title: 'Make cofee', done: false })
+});
+```
+
+## Computed signals
+
+A computed signal derives its value from other signals. We define them using the `computed` function which accepts a function that should compute the value and return it.
+
+Computed signals are:
+- read-only - their value will be the result of the calculation function we provide.
+- lazy - the function we provide will not run until we read the value of the signal.
+- memoized - after the value is calculated it is cached and the calculation function will not run again until any of the dependencies' (any signal we read) value changes.
+
+```ts
+import { signal, computed } from '@angular/core';
+
+const count: WritableSignal<number> = signal(0);
+const doubleCount: Signal<number> = computed(() => count() * 2);
+```
+
+The `doubleCount` signal depends on `count`. Whenever `count` updates, Angular knows that anything which depends on either `count` or `doubleCount` needs to update as well.
+
+### Computed signal dependencies
+
+Only the signals actually read during the calculation are tracked. For example, in this computed the `count` signal is only read if `showCount` is true:
+
+```ts
+const showCount = signal(false);
+const count = signal(0);
+const conditionalCount = computed(() => {
+    if (showCount()) {
+        return `The count is ${count()}.`;
+    } else {
+        return 'Nothing to see here!';
+    }
+});
+```
+
+When reading `conditionalCount`, if `showCount` is false the "Nothing to see here!" message is returned without reading the `count` signal. This means that updates to `count` will not result in a recomputation.
+
+If `showCount` is later set to `true` and `conditionalCount` is read again, the calculation will re-execute and take the branch where `showCount` is true, returning the message which shows the value of `count`. Changes to `count` will then invalidate `conditionalCount`'s cached value.
+
+Dependencies can be removed as well as added. If `showCount` is later set to `false` again, then `count` will no longer be considered a dependency of `conditionalCount`.
+
+## Effects
+
+Signals are useful because they can notify interested consumers when they change. An effect is an operation that runs whenever one or more signal values change. Effects always run **at least once**. When an effect runs, it tracks any signal value reads. Whenever any of these signal values change, the effect runs again. Similar to computed signals, effects keep track of their dependencies dynamically, and only track signals which were read in the most recent execution.
+
+We can create an effect with the `effect` function.
+
+```ts
+import { effect } from '@angular/core';
+
+effect(() => {
+    console.log(`The current count is: ${count()}`);
+});
+```
+
+Effects must be declared during the class's (component, service, etc) instantiation because they need to be destroyed along with the class.
+
+This means we have 2 options: 
+1. declare the effect in the constructor
+2. assign it to a property
+
+:::note
+The second option (assigning to a property) is preferred.
+:::
+
+```ts
+@Component({...})
+export class intervalComponent {
+    count = signal(0);
+
+    // register an effect by assigning it to a property
+    private loggingEffect = effect(() => {
+        console.log(`The count is: ${this.count()})`);
+    });
+
+    constructor() {
+        // register an effect in the constructor.
+        effect(() => {
+            console.log(`The count is: ${this.count()})`);
+        });
+    }
+}
+```
+
+We have the option to create an effect outside the constructor by passing the `Injector` to the `effect` function's options but this is usually better solved by using an extra signal that controls when the effect is run.
+
+<Tabs>
+    <TabItem label="Passing injector">
+        ```ts
+        @Component({...})
+        export class intervalComponent {
+            count = signal(0);
+            
+            private injector = inject(Injector);
+
+            initializeLogging(): void {
+                effect(() => {
+                    console.log(`The count is: ${this.count()})`);
+                }, {
+                    injector: this.injector
+                });
+            }
+        }
+        ```
+    </TabItem>
+    <TabItem label="Using controlling signal">
+        ```ts
+        @Component({...})
+        export class intervalComponent {
+            count = signal(0);
+            
+            private isLoggingEnabled = signal(false);
+            private loggingEffect = effect(() => {
+                if (this.isLoggingEnabled()) {
+                    console.log(`The count is: ${this.count()})`);
+                }
+            });
+
+            enableLogging(): void {
+                this.isLoggingEnabled.set(true);
+            }
+        }
+        ```
+    </TabItem>
+</Tabs>
+
+### Use cases for effects
+
+Effects are rarely needed in most application code, but may be useful in specific circumstances. Here are some examples of situations where an effect might be a good solution:
+
+- Logging data being displayed and when it changes, either for analytics or as a debugging tool.
+- Keeping data in sync with `localStorage`.
+- Adding custom DOM behavior that can't be expressed with template syntax.
+- Performing custom rendering to a <canvas>, charting library, or other third party UI library.
+
+:::caution
+By default, it is not allowed to update signals in effects as it can lead to infinite loops or unnecessary change detection cycles.
+:::
+
+## Advanced topics
+
+### Signal equality function
+
+By default, signals (writable and computed) use `===` to check whether their value has changed. We have to option to provide a custom equality function if we need to perform custom logic. Equality functions can be provided to both writable and computed signals.
+
+:::caution
+If we have to use this feature we probably have messed up.
+:::
+
+:::note
+When using the `mutate` method the signal does not check for equality.
+:::
+
+```ts
+import _ from 'lodash';
+
+const data = signal(['test'], {equal: _.isEqual});
+
+// Even though this is a different array instance, the deep equality
+// function will consider the values to be equal, and the signal won't
+// trigger any updates.
+data.set(['test']);
+```
+
+### Reading without tracking dependencies
+
+Rarely, we may want to execute code which may read signals in a reactive function such as computed or effect without creating a dependency.
+
+:::caution
+If we have to use this feature we probably have messed up.
+:::
+
+For example, suppose that when `currentUser` changes, the value of a `interval` should be logged. Creating an effect which reads both signals:
+
+```ts
+effect(() => {
+    console.log(`User set to `${currentUser()}` and the interval is ${interval()}`);
+});
+```
+
+This example logs a message when either `currentUser` or `interval` changes. However, if the effect should only run when `currentUser` changes, then the read of `interval` is only incidental and changes to `interval` shouldn't log a new message.
+
+We can prevent a signal read from being tracked by calling its getter with `untracked`:
+
+```ts
+effect(() => {
+    console.log(`User set to `${currentUser()}` and the interval is ${untracked(interval)}`);
+});
+```
+
+`untracked` is also useful when an effect needs to invoke some external code which shouldn't be treated as a dependency:
+
+```ts
+effect(() => {
+    const user = currentUser();
+    untracked(() => {
+        // If the `loggingService` reads signals, they won't be counted as
+        // dependencies of this effect.
+        this.loggingService.log(`User set to ${user}`);
+    });
+});
+```
+
+### Effect cleanup functions
+
+Effects might start long-running operations, which should be cancelled if the effect is destroyed or runs again before the first operation finished. When we create an effect, our function can optionally accept an `onCleanup` function as its first parameter. This `onCleanup` function lets us register a callback that is invoked before the next run of the effect begins, or when the effect is destroyed.
+
+```ts
+effect((onCleanup) => {
+    const user = currentUser();
+
+    const timer = setTimeout(() => {
+        console.log(`1 second ago, the user became ${user}`);
+    }, 1000);
+
+    onCleanup(() => {
+        clearTimeout(timer);
+    });
+});
+```
+
+### Destroying effects
+
+When we create an effect, it is automatically destroyed when its enclosing context is destroyed. This means that effects created within components are destroyed when the component is destroyed. The same goes for effects within directives, services, etc.
+
+Effects return an `EffectRef` that can be used to destroy them manually, via the `destroy` method. This can also be combined with the `manualCleanup` option to create an effect that lasts until it is manually destroyed. 
+
+:::caution
+Be careful to actually clean up such effects when they're no longer required.
+:::
+
+```ts
+@Component({...})
+export class intervalComponent {
+    count = signal(0);
+    
+    private loggingEffect = effect(() => {
+        console.log(`The count is: ${this.count()})`);
+    }, {
+        // mark effect as manually cleaned up
+        manualCleanup: true
+    });
+
+    stopLogging(): void {
+        // destroy effect
+        this.loggingEffect.destroy();
+    }
+}
+```
+
+## Interop with rxjs
+
+### toSignal
+
+The `toSignal` function creates a signal which tracks the value of an Observable. It behaves similarly to the `async` pipe in templates, but is more flexible and can be used anywhere in an application.
+
+Like the `async` pipe, `toSignal` subscribes to the Observable immediately, which may trigger side effects. The subscription created by `toSignal` automatically unsubscribes from the given Observable upon destruction of the component in which `toSignal` is called. 
+
+:::note
+This means that `toSignal` must be called during the class's instantiation (in the constructor, or assigned to a property).
+:::
+
+If an Observable used in `toSignal` produces an error, that error is thrown when the signal is read.
+
+If an Observable used in `toSignal` completes, the signal continues to return the most recently emitted value before completion.
+
+Observables may not produce a value synchronously on subscription, but signals always require a current value. There are several ways to deal with this **initial** value.
+- Calling `toSignal` without the options object will create a signal with an initial value of `undefined`.
+- The `initialValue` option specifies the value the signal should return before the Observable emits for the first time.
+- The `requireSync` option, when set to true, will require an observable that emits an initial value synchronously or will throw an error.
+
+```ts
+import { toSignal } from '@angular/core/rxjs-interop';
+
+@Component({...})
+export class Ticker {
+    interval$: Observable<number> = interval(1000);
+    timer$: Observable<number> = timer(0, 1000);
+
+    intervalWithUndefinedInitialValue: Signal<number | undefined> = toSignal(this.interval$);
+
+    intervalWithExplicitInitialValue: Signal<number> = toSignal(this.interval$, { initialValue: 0 });
+
+    // this will throw an error because `interval` does not emit a value synchronously
+    intervalWithRequireSync: Signal<number> = toSignal(this.interval$, { requireSync: true });
+
+    // this will work as expected because `timer` emits the initial value synchronously
+    // since we set the initial delay to 0
+    timerWithRequireSync: Signal<number> = toSignal(this.timer$, { requireSync: true });
+}
+```
+
+### toObservable
+
+The `toObservable` function creates an Observable which tracks the value of a signal. The signal's value is monitored with an effect, which emits the value to the Observable when it changes.
+
+:::note
+This means that `toObservable` must be called during the class's instantiation (in the constructor, or assigned to a property).
+:::
+
+```ts
+import { toObservable } from '@angular/core/rxjs-interop';
+
+@Component(...)
+export class SearchResults {
+  query = signal('');
+  query$ = toObservable(this.query);
+
+  results$ = this.query$.pipe(
+    switchMap((query) => this.http.get('/search?q=' + query ))
+  );
+}
+```
+
+## Signals vs observables
+
+So why do we need another reactive primitive if we already have observables?
+
+### Sync vs async
+
+Observables are push-based - they push values to observers. Subscribing to an observable **might** push a value synchronously but there is no guarantee.
+
+Signals are pull-based - consumers pull the current value. Calling the getter function of a signal will **always** return a value synchronously.
+
+### Dependencies
+
+When using observables we have to explicitly define the dependencies beforehand in a setup phase (eg. with `combineLatest`) and the dependencies remain static, as we have defined them in the setup phase.
+
+When using signals the dependencies (other signals) are tracked automatically based on the execution flow. This means that control flow (if, switch, etc) can affect the dependency graph, making it dynamic.
+
+### Subscriptions
+
+When using observables we need to somehow manage subscriptions (OnDestroy, AsyncPipe, etc) to them so we don't leak memory.
+
+Signals don't have explicit subscription logic, it's done behind the scenes by the framework, so we don't need to worry about it.
+
+### Choosing the right tool for the job
+
+In most cases, when all we need is a value that might change and some reactive primitives to compute other values or run side-effect logic, signals will be good-enough.
+
+In cases where **time** is an important part of the logic (eg. event streams, websockets, etc), observables will probably be our best bet.
