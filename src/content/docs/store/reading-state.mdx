@@ -93,3 +93,86 @@ export class ComponentOrService {
     winner$ = inject(Store).select(selectWinner);
 }
 ```
+
+### ViewModel pattern
+
+The recommended approach is to group all the selectors we need in the component in a single selector. We do this to minimize the amount of subscriptions we create in the template (only one AsyncPipe necessary in the template).
+
+Instead of this:
+
+```typescript
+@Component({
+  selector: "my-component",
+  template: `
+    <div>Page size: {{ pageSize$ | async }}</div>
+    <div>Pages: {{ pages$ | async }}</div>
+    <div>Total items: {{ totalItems$ | async }}</div>
+  `,
+})
+export class MyComponent {
+  totalItems$ = this.store.select(selectTotalItems);
+  pageSize$ = this.store.select(selectPageSize);
+  pages$ = this.store.select(selectPages);
+
+  constructor(private store: Store) {}
+}
+```
+
+We want to have this:
+
+```typescript
+@Component({
+  selector: "my-component",
+  template: `
+    <ng-container *ngIf="viewModel$ | async as viewModel">
+      <div>Page size: {{ viewModel.pageSize }}</div>
+      <div>Pages: {{ viewModel.pages }}</div>
+      <div>Total items: {{ viewModel.totalItems }}</div>
+    </ng-container>
+  `,
+})
+export class MyComponent {
+  viewModel$ = this.store.select(selectMyComponentViewModel);
+
+  constructor(private store: Store) {}
+}
+```
+
+The `createSelector` function also accepts a record of selectors to create a selector that returns a record of the values of the selectors we provided.
+
+```typescript
+  const selectMyComponentViewModel = createSelector({
+    totalItems: selectTotalItems,
+    pageSize: selectPageSize,
+    pages: selectPages,
+  });
+  // this is the same as the above
+  // const selectMyComponentViewModel = createSelector(
+  //	selectTotalItems,
+  //	selectPageSize,
+  //	selectPages,
+  //	 (totalItems, pageSize, pages) => ({
+  //		 totalItems,
+  //		 pageSize,
+  //		 pages,
+  //	 })
+  // );
+```
+
+## selectSignal
+
+Since v16 we can use the `selectSignal` method of `Store` to read values using [signals](../../angular/signals) instead of observables. This allows us to avoid the `*ngIf="observable$ | async as value"` pattern.
+
+```typescript
+@Component({
+    selector: "my-component",
+    template: `
+        <div>Page size: {{ viewModel().pageSize }}</div>
+        <div>Pages: {{ viewModel().pages }}</div>
+        <div>Total items: {{ viewModel().totalItems }}</div>
+    `,
+})
+export class MyComponent {
+    viewModel = inject(Store).selectSignal(selectMyComponentViewModel);
+}
+```
