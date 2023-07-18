@@ -1,0 +1,182 @@
+---
+title: Angular standalone API
+description: Using the Angular standalone API
+template: doc
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Standalone components provide a simplified way to build Angular applications. Standalone components, directives, and pipes aim to streamline the authoring experience by reducing the need for `NgModules`.
+
+## Authoring standalone components, directives and pipes
+
+Components, directives, and pipes can now be marked as `standalone: true`. Angular classes marked as standalone do not need to be declared in an `NgModule` (the compiler will throw an error).
+
+Standalone components specify their dependencies directly instead of getting them through `NgModules`. The `imports` property is used to reference standalone components, directives or pipes and NgModules. In this way, standalone components can be written without the need to create an NgModule to manage template dependencies.
+
+```ts
+@Component({
+    // marks this component as standalone
+    standalone: true,
+    selector: 'photo-gallery',
+    // ImageGridComponent is another standalone component
+    // MatButtonModule is the @angular/material button NgModule
+    imports: [ImageGridComponent, MatButtonModule],
+    template: `
+        <image-grid [images]="imageList"></image-grid>
+        <button mat-button>Next Page</button>
+    `,
+})
+export class PhotoGalleryComponent {
+  // component logic
+}
+```
+
+## AppModule replacement
+
+1. We mark `AppComponent` as standalone.
+2. In the `main.ts` file we use the `bootstrapApplication` with the `AppComponent`, instead of `platformBrowserDynamic().bootstrapModule()`.
+3. Any providers we had in `AppModule` can be moved to the providers option of `bootstrapApplication`.
+4. Any NgModule imports we were using to setup providers can be wrapped with `importProvidersFrom` and moved to the providers option of `bootstrapApplication`.
+5. As an alternative to step 4, some libraries provide standalone-compatible APIs.
+
+```ts
+import { bootstrapApplication } from '@angular/platform-browser';
+import { importProvidersFrom } from '@angular/core';
+import { provideRouter } from '@angular/router';
+
+bootstrapApplication(AppComponent, {
+    providers: [
+        { provide: BACKEND_URL, useValue: 'https://looknongmodules.com/api' },
+        provideRouter([/* app routes */]),
+        importProvidersFrom(
+            LibraryModule.forRoot()
+        ),
+    ]
+});
+```
+
+## inject()
+
+We can use the `inject` function to inject services or InjectionTokens. This function can only be used during a class's instantiation (in a constructor or on a property) or the factory function of a provider.
+
+<Tabs>
+    <TabItem label="using inject()">
+        ```ts
+        class SomeComponent {
+            // injecting the ActivatedRoute service
+            private activatedRoute = inject(ActivatedRoute);
+            // injecting the SOME_TOKEN InjectionToken
+            private someToken = inject(SOME_TOKEN);
+        }
+        ```
+    </TabItem>
+    <TabItem label="without inject()">
+        ```ts
+        class SomeComponent {
+            constructor(private activatedRoute: ActivatedRoute, @Inject(SOME_TOKEN) private someToken: TypeOfSomeToken) {}
+        }
+        ```
+    </TabItem>
+</Tabs>
+
+## Routing
+
+### Lazy-loading
+
+Any route can lazily load its routed, standalone component by using loadComponent:
+
+```ts
+export const ROUTES: Route[] = [
+    { path: 'admin', loadComponent: () => import('./admin/panel.component').then((module) => module.AdminPanelComponent) },
+    // ...
+];
+```
+
+If the component is the `default` export it can be further simplified:
+
+```ts
+export const ROUTES: Route[] = [
+    { path: 'admin', loadComponent: () => import('./admin/panel.component') },
+    // ...
+];
+```
+
+The same is true for lazy-loading many routes at once:
+
+<Tabs>
+    <TabItem label="app.routes.ts">
+        ```ts
+        export const ROUTES: Route[] = [
+            { path: 'admin', loadChildren: () => import('./admin/routes').then((module) => module.ADMIN_ROUTES) },
+            { path: 'products', loadChildren: () => import('./products/routes') },
+            // ...
+        ];
+        ```
+    </TabItem>
+    <TabItem label="admin/routes.ts">
+        ```ts
+        export const ADMIN_ROUTES: Route[] = [
+            { path: 'home', component: AdminHomeComponent },
+            { path: 'users', component: AdminUsersComponent },
+        ];
+        ```
+    </TabItem>
+    <TabItem label="products/routes.ts">
+        ```ts
+        export default [
+            { path: '', pathMatch: 'full', component: ProductsListComponent },
+            { path: ':id', component: ProductDetailsComponent },
+        ];
+        ```
+    </TabItem>
+</Tabs>
+
+### Providing services to a subset of routes
+
+The Router now supports explicitly specifying additional providers on a Route, which allows us to providing services only for a subset of routes without the need for either lazy loading or NgModules.
+
+```ts
+export const ROUTES: Route[] = [
+    {
+        path: 'admin',
+        // these will be available only for this route and its children
+        providers: [
+            AdminService,
+            { provide: ADMIN_API_KEY, useValue: '12345' },
+        ],
+        children: [
+            { path: 'users', component: AdminUsersComponent },
+            { path: 'teams', component: AdminTeamsComponent },
+        ],
+    },
+];
+```
+
+### Functional guards
+
+While not part of the standalone API, we also have the ability to write guards as functions instead of classes. We can use the [inject](#inject()) function if we need to use any services.
+
+<Tabs>
+    <TabItem label="auth.guard.ts">
+        ```ts
+        export const authGuard: CanActivateFn = (
+            next: ActivatedRouteSnapshot,
+            state: RouterStateSnapshot) => {
+                const store = inject(Store);
+        
+                return store.select(selectIsUserLoggedIn).pipe(take(1));
+            }
+        ```
+    </TabItem>
+    <TabItem label="app.routes.ts">
+        ```ts
+        export const ROUTES: Route[] = [
+            {
+                path: 'protected',
+                canActivate: [authGuard]
+            },
+        ];
+        ```
+    </TabItem>
+</Tabs>
