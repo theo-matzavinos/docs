@@ -14,10 +14,15 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Angular',
-          items: [{
-            label: 'Signals',
-            link: "angular/signals"
-          }]
+          items: [
+            {
+              label: 'Standalone',
+              link: "angular/standalone"
+            }, {
+              label: 'Signals',
+              link: "angular/signals"
+            }
+          ]
         },
         {
           label: "Store",
