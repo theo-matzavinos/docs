@@ -74,6 +74,10 @@ export default defineConfig({
           link: "query"
         },
         {
+          label: 'Tailwind',
+          link: 'tailwind'
+        },
+        {
           label: "Project structure",
           link: "structure"
         }

@@ -1,0 +1,26 @@
+---
+title: Tailwind
+description: Using tailwind
+template: doc
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Adding styles to a routed component
+
+```ts
+@Component({
+    host: {
+        class: 'flex bg-red'
+    }
+})
+export class SomeComponent {}
+```
+
+## Repeated classes
+
+Create component or directive.
+
+## Notes
+
+Class names must be fully written. No string concatenation, interpolation, etc.
