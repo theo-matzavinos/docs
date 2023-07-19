@@ -6,7 +6,7 @@ template: doc
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-Standalone components provide a simplified way to build Angular applications. Standalone components, directives, and pipes aim to streamline the authoring experience by reducing the need for `NgModules`.
+Standalone components provide a simplified way to build Angular applications. Standalone components, directives, and pipes aim to streamline the authoring experience by reducing the need for `NgModules`. We can now import a component's dependencies directly in the `@Component` decorator.
 
 ## Authoring standalone components, directives and pipes
 
@@ -27,9 +27,7 @@ Standalone components specify their dependencies directly instead of getting the
         <button mat-button>Next Page</button>
     `,
 })
-export class PhotoGalleryComponent {
-  // component logic
-}
+export class PhotoGalleryComponent {}
 ```
 
 ## AppModule replacement

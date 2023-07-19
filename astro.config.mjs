@@ -69,6 +69,14 @@ export default defineConfig({
             },
           ],
         },
+        {
+          label: "Query",
+          link: "query"
+        },
+        {
+          label: "Project structure",
+          link: "structure"
+        }
       ],
     }),
   ],

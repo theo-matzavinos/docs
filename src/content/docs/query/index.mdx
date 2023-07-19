@@ -1,0 +1,145 @@
+---
+title: Query
+description: Using @ngneat/query to manage http queries and mutations
+template: doc
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Queries
+
+
+### Basic query
+
+<Tabs>
+    <TabItem label="todos.service.ts">
+        ```ts
+        import { UseQuery } from '@ngneat/query';
+        
+        @Injectable({ providedIn: 'root' })
+        export class TodosService {
+            private http = inject(HttpClient);
+            private useQuery = inject(UseQuery);
+        
+            getTodos() {
+                return this.useQuery(['todos'], () => {
+                    return this.http.get<Todo[]>(
+                        'https://jsonplaceholder.typicode.com/todos'
+                    );
+                });
+            }
+        
+            getTodo(id: number) {
+                return this.useQuery(['todo', id], () => {
+                    return this.http.get<Todo>(
+                        `https://jsonplaceholder.typicode.com/todos/${id}`
+                    );
+                });
+            }
+        }
+        ```
+    </TabItem>
+    <TabItem label="todos-list.component.ts">
+        ```ts
+        @Component({
+        template: `
+            <ng-container *ngIf="todos$ | async as todos">
+                <div *ngIf="todos.isLoading">Loading...</div>
+
+                <div *ngIf="todos.isError">Error...</div>
+
+                <ul *ngIf="todos.isSuccess">
+                    <li *ngFor="let todo of todos.data">
+                        {{ todo.title }}
+                    </li>
+                </ul>
+            </ng-container>
+        `,
+        })
+        export class TodosListComponent {
+            todos$ = inject(TodosService).getTodos().result$;
+        }
+        ```
+    </TabItem>
+</Tabs>
+
+### Infinite query
+
+```ts
+import { UseInfiniteQuery } from '@ngneat/query';
+
+@Injectable({ providedIn: 'root' })
+export class ProjectsService {
+    private useInfiniteQuery = inject(UseInfiniteQuery);
+
+    getProjects() {
+        return this.useInfiniteQuery(
+        ['projects'],
+        ({ pageParam = 0 }) => {
+            return getProjects(pageParam);
+        },
+        {
+            getNextPageParam(projects) {
+                return projects.nextId;
+            },
+            getPreviousPageParam(projects) {
+                return projects.previousId;
+            },
+        }
+        );
+    }
+}
+```
+
+## Mutations
+
+<Tabs>
+    
+    <TabItem label="todos.service.ts">
+        ```ts
+        @Injectable({ providedIn: 'root' })
+        export class TodosService {
+            private http = inject(HttpClient);
+            private queryClient = inject(QueryClientService);
+            private useMutation = inject(UseMutation);
+        
+            addTodo() {
+                return this.useMutation(({ title }: { title: string }) => {
+                    return this.http.post<{ success: boolean }>(`todos`, { title });
+                }, {
+                    onSuccess: (newTodo) => {
+                        // Invalidate to refetch
+                        this.queryClient.invalidateQueries(['todos']);
+                        // Or update manually
+                        this.queryClient.setQueryData<TodosResponse>(
+                            ['todos'],
+                            (todos: Todo[] | undefined) => [...todos, newTodo]
+                        );
+                    }
+                });
+            }
+        }
+        ```
+    </TabItem>
+    <TabItem label="todos-list.component.ts">
+        ```ts
+        @Component({
+            template: `
+                <input type="text" [(ngModel)]="title" />
+
+                <button (click)="addTodo()">
+                    Add todo {{ (addTodoMutation.result$ | async).isLoading ? 'Loading' : '' }}
+                </button>
+            `,
+            })
+            export class TodosPageComponent {
+                addTodoMutation = inject(TodosService).addTodo();
+                title = '';
+
+                addTodo() {
+                    this.addTodoMutation$.mutate({ title: this.title });
+                }
+            }
+        ```
+    </TabItem>
+</Tabs>

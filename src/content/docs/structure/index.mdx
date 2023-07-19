@@ -1,0 +1,104 @@
+---
+title: Project structure
+description: Project structure 
+template: doc
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Sub-domains
+
+The project is split into sub-domains.
+
+### Domain library
+
+Store, services, dtos, domain logic.
+
+### Feature libraries
+
+Features.
+
+### Shell library
+
+Routing, layout.
+
+### API library
+
+Expose parts of sub-domain to other sub-domains.
+
+### UI libraries
+
+Domain-specific shared libraries.
+
+## Shared libraries
+
+Generic shared libraries.
+
+## Cross-domain actions
+
+Actions that are dispatched from one domain that affect state of another domain are defined in the domain that owns the state and exported from the `api` library. This is done to avoid circular imports.
+
+<Tabs>
+    <TabItem label="auth/domain/actions.ts">
+        ```ts
+        export const userDashboardAuthActions = createActionGroup({
+            source: 'User Dashboard',
+            events: {
+                Logout: emptyProps()
+            }
+        });
+        ```
+    </TabItem>
+    <TabItem label="auth/api/index.ts">
+        ```ts
+        export { userDashboardAuthActions } from '@project-name/auth/domain';
+        ```
+    </TabItem>
+    <TabItem label="account/features/dashboard/user-dashboard.component.ts">
+        ```ts
+        import { userDashboardAuthActions } from '@project-name/auth/api';
+
+        @Component({...})
+        export class UserDashboardComponent {
+            private store = inject(Store);
+
+            logout() {
+                this.store.dispatch(userDashboardAuthActions.logout());
+            }
+        }
+        ```
+    </TabItem>
+</Tabs>
+
+## Rules
+
+`domain` libraries can only import:
+- `api` libraries of other domains
+- `shared` libraries
+
+`feature` libraries can only import:
+- the `domain` library of the sub-domain they belong to
+- `ui` libraries of the sub-domain they belong to
+- `api` libraries of other domains
+- `shared` libraries
+
+`api` libraries can only import:
+- any library of the sub-domain they belong to
+- `api` libraries of other domains
+- `shared` libraries
+
+`shell` libraries can only import:
+- the `domain` library of the sub-domain they belong to
+- `feature` libraries of the sub-domain they belong to
+- `ui` libraries of the sub-domain they belong to
+- `api` libraries of other domains
+- `shared` libraries
+
+`ui` libraries can only import:
+- the `domain` library of the sub-domain they belong to
+- `ui` libraries of the sub-domain they belong to
+- `api` libraries of other domains
+- `shared` libraries
+
+`shared` libraries can only import:
+- `shared` libraries
