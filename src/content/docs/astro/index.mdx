@@ -1,0 +1,548 @@
+---
+title: Astro
+description: Developing applications with Astro
+template: doc
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Introduction
+
+[Official docs](https://docs.astro.build/en/getting-started/)
+
+Astro is a framework for building content-focused sites and apps.
+We break the application down into smaller components, like in all modern frameworks, but everything is rendered on the server.
+The default building block are Astro components but there are integrations that allow us to use components from other frameworks, including Angular. By using these integrations we can add components that add client-side interactivity (islands architecture).
+Astro uses file-based routing, that means the file/directory structure of the application defines the available routes.
+
+## Project structure
+
+- `public`
+  This directory contains the static assets of the app (images, fonts, etc).
+- `src/components`
+  This directory contains the reusable Astro or Angular components.
+- `src/layouts`
+  This directory contains the reusable Astro layout components.
+- `src/pages`
+  This directory contains the Astro page components that define the routing of the app.
+
+## Astro components
+
+Astro components are the basic building blocks of any Astro project. You can spot an Astro component by its file extension: `.astro`.
+They are rendered to HTML on the server. We can use JavaScript/TypeScript inside an Astro component but it only runs on the server and is not sent to the client.
+If we need client-side interactivity we can include a `<script>` tag or use an Angular component.
+
+### Component structure
+
+An Astro component is made up of two main parts: the Component Script and the Component Template.
+
+```
+---
+// Component Script (JavaScript/TypeScript)
+---
+<!-- Component Template (HTML / JSX) -->
+```
+
+#### Component Script
+
+Astro uses a code fence (`---`) to identify the component script in an Astro component.
+
+We can use the component script to write any JavaScript/TypeScript code that we need to render your template. This can include:
+
+- importing other Astro components
+- importing other framework components, like Angular
+- importing data, like a JSON file
+- fetching content from an API or database
+- creating variables that we will reference in the template
+
+```ts
+---
+import SomeAstroComponent from '../components/SomeAstroComponent.astro';
+import { SomeAngularComponent } from '../components/some-angular.component';
+import someData from '../data/pokemon.json';
+
+// Access passed-in component props, like `<X title="Hello, World" />`
+const { title } = Astro.props;
+
+// Fetch external data, even from a private API or database
+const data = await fetch('SOME_SECRET_API_URL/users').then(r => r.json());
+---
+<!-- Your template here! -->
+```
+
+#### Component Template
+
+The component template is below the code fence and determines the HTML output of the component.
+The template can be plain HTML and JSX, `<script>` and `<style>` tags are supported and we can use any imported components and variables we defined in the [Component Script](#component-script).
+Astro also provides some [special directives](#directives) we can use.
+
+```ts
+---
+// Your component script here!
+import Banner from '../components/Banner.astro';
+import PokemonComponent from '../components/pokemon.component';
+
+const myFavoritePokemon = [/* ... */];
+const { title } = Astro.props;
+---
+<!-- HTML comments supported! -->
+{/* JSX comment syntax is also valid! */}
+
+<!-- Imported Astro component -->
+<Banner />
+<h1>Hello, world!</h1>
+
+<!-- Use props and other variables from the component script: -->
+<p>{title}</p>
+
+<!-- Imported Angular component -->
+<!-- Using the Astro `client:` directive to hydrate: -->
+<PokemonComponent client:visible />
+
+<!-- Mix HTML with JavaScript expressions, similar to JSX: -->
+<ul>
+  {myFavoritePokemon.map((data) => <li>{data.name}</li>)}
+</ul>
+
+<!-- Use a template directive to build class names from multiple strings or even objects! -->
+<p class:list={["add", "dynamic", {classNames: true}]} />
+```
+
+#### Component Props
+
+An Astro component can define and accept props. These are the equivalent of `@Input()` in an Angular component. These props then become available to the component template for rendering HTML. Props are available on the `Astro.props` global. We can also define a type for the props by defining a `Props` type in the [Component Script](#component-script) and provide default values.
+
+<Tabs>
+    <TabItem label="src/components/GreetingHeadline.astro">
+        ```ts
+        ---
+        // Define a type to be used for type-checking and code-completion
+        interface Props {
+            name: string;
+            greeting?: string;
+        }
+        
+        const {
+            // Define default value for greeting
+            greeting = 'Hello',
+            name,
+        } = Astro.props;
+        ---
+        <h2>{greeting}, {name}!</h2>
+        ```
+    </TabItem>
+    <TabItem label="src/components/GreetingCard.astro">
+        ```ts
+        ---
+        import GreetingHeadline from './GreetingHeadline.astro';
+        const name = "Astro"
+        ---
+        <h1>Greeting Card</h1>
+        <GreetingHeadline greeting="Hi" name={name} />
+        <p>I hope you have a wonderful day!</p>
+        ```
+    </TabItem>
+ </Tabs>
+
+### Slots
+
+The `<slot />` element is a placeholder for external HTML content, allowing us to inject (or “slot”) child elements from other files into the component's template. This is equivalent to `<ng-content>` in Angular. This pattern is the basis of an Astro layout component: an entire page of HTML content can be “wrapped” with `<SomeLayoutComponent></SomeLayoutComponent>` and sent to the component to render inside of common page elements defined there.
+
+<Tabs>
+    <TabItem label="src/components/Wrapper.astro">
+    ```ts
+    ---
+    import Header from './Header.astro';
+    import Logo from './Logo.astro';
+    import Footer from './Footer.astro';
+
+    const { title } = Astro.props
+    ---
+    <div id="content-wrapper">
+        <Header />
+        <Logo />
+        <h1>{title}</h1>
+        <slot />  <!-- children will go here -->
+        <Footer />
+    </div>
+    ```
+    </TabItem>
+    <TabItem label="src/pages/fred.astro">
+    ```ts
+    ---
+    import Wrapper from '../components/Wrapper.astro';
+    ---
+    <Wrapper title="Fred's Page">
+        <h2>All about Fred</h2>
+        <p>Here is some stuff about Fred.</p>
+    </Wrapper>
+    ```
+    </TabItem>
+</Tabs>
+
+#### Named slots
+
+Slots can also be named. This allows us to create multiple extension points for a component's template. To use this feature we set the `name` prop on a `<slot />` and the `slot` attribute on the elements we want to inject to the same value.
+
+<Tabs>
+    <TabItem label="src/components/Wrapper.astro">
+    ```ts
+    ---
+    import Header from './Header.astro';
+    import Logo from './Logo.astro';
+    import Footer from './Footer.astro';
+
+    const { title } = Astro.props
+    ---
+    <div id="content-wrapper">
+        <Header />
+        <slot name="after-header"/>  <!--  children with the `slot="after-header"` attribute will go here -->
+        <Logo />
+        <h1>{title}</h1>
+        <slot />  <!--  children without a `slot`, or with `slot="default"` attribute will go here -->
+        <Footer />
+        <slot name="after-footer"/>  <!--  children with the `slot="after-footer"` attribute will go here -->
+    </div>
+    ```
+    </TabItem>
+    <TabItem label="src/pages/fred.astro">
+    ```ts
+    ---
+    import Wrapper from '../components/Wrapper.astro';
+    ---
+    <Wrapper title="Fred's Page">
+        <img src="https://my.photo/fred.jpg" slot="after-header">
+        <h2>All about Fred</h2>
+        <p>Here is some stuff about Fred.</p>
+        <p slot="after-footer">Copyright 2022</p>
+    </Wrapper>
+    ```
+    </TabItem>
+</Tabs>
+
+#### Fallback content for slots
+
+Slots can also render fallback content. When there are no matching children passed to a slot, a <slot /> element will render its own placeholder children.
+
+```ts
+---
+import Header from './Header.astro';
+import Logo from './Logo.astro';
+import Footer from './Footer.astro';
+
+const { title } = Astro.props
+---
+<div id="content-wrapper">
+  <Header />
+  <Logo />
+  <h1>{title}</h1>
+  <slot>
+    <p>This is my fallback content, if there is no child passed into slot</p>
+  </slot>
+  <Footer />
+</div>
+```
+
+#### Transfering slots
+
+Slots can be transfered to other components. This can be useful when creating nested layouts. The default slot can be transfered by just adding it to both components. To transfer named slots we define a slot with both the `name` and `slot` props on the consuming component.
+
+<Tabs>
+    <TabItem label="src/layouts/BaseLayout.astro">
+    ```ts
+    ---
+    ---
+
+    <html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <meta name="viewport" content="width=device-width" />
+        <meta name="generator" content={Astro.generator} />
+        <slot name="head"/>
+    </head>
+    <body>
+        <slot />
+    </body>
+    </html>
+    ```
+    </TabItem>
+    <TabItem label="src/layouts/HomeLayout.astro">
+    ```ts
+    ---
+    import BaseLayout from "./BaseLayout.astro";
+    ---
+
+    <BaseLayout>
+        // this defines a head slot on the HomeLayout component that is transfered to the head slot of the BaseLayout component
+        <slot name="head" slot="head"/>
+        <slot />
+    </BaseLayout>
+    ```
+    </TabItem>
+</Tabs>
+
+## Layouts
+
+Layouts are Astro components used to provide a reusable UI structure, such as a page template.
+
+We conventionally use the term “layout” for Astro components that provide common UI elements shared across pages such as headers, navigation bars, and footers. A typical Astro layout component provides:
+
+- a page shell (`<html>`, `<head>` and `<body>` tags)
+- a `<slot />` to specify where individual page content should be injected.
+
+```ts
+---
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+const { title } = Astro.props
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <BaseHead title={title}/>
+  </head>
+  <body>
+    <nav>
+      <a href="#">Home</a>
+      <a href="#">Posts</a>
+      <a href="#">Contact</a>
+    </nav>
+    <h1>{title}</h1>
+    <article>
+      <slot /> <!-- your content is injected here -->
+    </article>
+    <Footer />
+  </body>
+</html>
+```
+
+## Pages
+
+Pages are files that live in the `src/pages` directory of the project. They are responsible for handling routing, data loading, and overall page layout. Links to pages can be created with simple `<a href="/some-page">Link label</a>` tags.
+
+Astro supports the following file types in the src/pages/ directory:
+
+- `.astro`
+- `.md`
+- `.mdx` (with the MDX Integration installed)
+- `.html`
+- `.js`/`.ts` (as API endpoints)
+
+
+## Angular
+
+[Official integration docs](https://analogjs.org/docs/packages/astro-angular/overview)
+
+The Astro Angular integration *only* supports rendering *standalone* components
+
+<Tabs>
+    <TabItem label="src/components/hello.component.ts">    
+    ```ts
+    import { NgIf } from '@angular/common';
+    import { Component, Input } from '@angular/core';
+
+    @Component({
+        selector: 'app-hello',
+        standalone: true,
+        imports: [NgIf],
+        template: `
+            <p>Hello from Angular!!</p>
+
+            <p *ngIf="show">{{ helpText }}</p>
+
+            <button (click)="toggle()">Toggle</button>
+        `,
+    })
+    export class HelloComponent {
+        @Input() helpText = 'help';
+
+        show = false;
+
+        toggle() {
+            this.show = !this.show;
+        }
+    }
+    ```
+    </TabItem>
+    <TabItem label="src/components/SomeComponent.astro">
+    ```ts
+    ---
+    import { HelloComponent } from '../components/hello.component';
+
+    const helpText = "Helping binding";
+    ---
+
+    <HelloComponent />
+    <HelloComponent helpText="Helping" />
+    <HelloComponent helpText={helpText} />
+    ```
+    </TabItem>
+</Tabs>
+
+Using an Angular component this way will only render on the server and send just the component's HTML to the client. If we want this component to provide client-side interactivity we can use Astro's [client directive](#client-directives).
+
+### Adding providers
+
+Since we're only rendering *standalone* components there is no `main.ts` or `AppModule` files where we can register providers. The Astro-Angular integration supports this by using static properties on the components' classes.
+
+- `clientProviders`
+Using this property we register providers that need to be available on the client-side.
+- `renderProviders`
+Using this property we register providers that need to be available *only* when rendering on the server.
+
+```ts
+import { Component, OnInit, inject } from '@angular/core';
+import { NgFor } from '@angular/common';
+import { provideHttpClient, HttpClient } from '@angular/common/http';
+
+import { provideMockHttpClient } from './mock-http-client';
+
+interface Todo {
+  id: number;
+  title: string;
+  completed: boolean;
+}
+
+@Component({
+  selector: 'app-todos',
+  standalone: true,
+  imports: [NgFor],
+  template: `
+    <h2>Todos</h2>
+
+    <ul>
+      <li *ngFor="let todo of todos">
+        {{ todo.title }}
+      </li>
+    </ul>
+  `,
+})
+export class TodosComponent implements OnInit {
+  // clientProviders are available client-side
+  static clientProviders = [provideHttpClient()];
+  // renderProviders are only available server-side
+  static renderProviders = [provideMockHttpClient()];
+
+  httpClient = inject(HttpClient);
+  todos: Todo[] = [];
+
+  ngOnInit() {
+    this.httpClient
+      .get<Todo[]>('https://jsonplaceholder.typicode.com/todos')
+      .subscribe((todos) => (this.todos = todos));
+  }
+}
+```
+
+### Limitations
+
+`@Output()` can only be used between Angular components. If we need to emit events from an Angular component to an Astro component we would have to use `@Input()` with a callback function. This is probably never going to be an issue.
+
+## Astro Template Directives
+
+Template directives are a special kind of HTML attribute available inside of any Astro component template (.astro files).
+
+Template directives are used to control an element or component's behavior in some way. A template directive could enable some compiler feature that makes our life easier (like using `class:list` instead of `class`). Or, a directive could tell the Astro compiler to do something special with that component (like hydrating with `client:load`).
+
+For a template directive to be valid, it must:
+
+- Include a colon : in its name, using the form `X:Y` (ex: `client:load`).
+- Be visible to the compiler (ex: `<X {...props}>` would not work if `props` contained a directive).
+
+Some template directives, but not all, can take a custom value:
+
+- `<X client:load />` (takes no value)
+- `<X class:list={['some-css-class']} />` (takes an array)
+
+### Common Directives
+
+#### class:list
+
+`class:list={...}` takes an array of class values and converts them into a class string.
+
+These values can be a mixture of:
+- `string`: Added to the element class
+- `Object`: All truthy keys are added to the element class
+- `Array`: flattened
+- `false`, `null`, or `undefined`: skipped
+
+```jsx
+<!-- This -->
+<span class:list={[ 'hello goodbye', { world: true }, [ 'friend' ] ]} />
+<!-- Becomes -->
+<span class="hello goodbye world friend"></span>
+```
+
+#### set:html
+
+`set:html={value}` injects an HTML string into an element, similar to setting `el.innerHTML`.
+
+The value can be:
+- `string`
+Self-explanatory
+- `Promise<string>`
+This can be used if the string needs to be loaded asynchronously.
+- `Promise<Response>`
+
+
+This directive can also be used on a `<Fragment />` to avoid creating a wrapper element. The `<Fragment />` component is equivalent to `<ng-container />`, it doesn't render any HTML on its own.
+
+```ts
+---
+import { db } from '../db';
+
+const cmsContent: string = await fetchHTMLFromMyCMS();
+const dbContent: Promise<string> = db.getContent();
+const externalContent: Promise<Response> = fetch('http://example/old-posts/making-soup.html');
+---
+<Fragment set:html={cmsContent} />
+<article set:html={dbContent}></article>
+<article set:html={externalContent}></article>
+```
+
+### Client Directives
+
+These directives control how UI Framework (Angular) components are hydrated on the page.
+
+By default, a UI Framework component is not hydrated in the client. If no `client:*` directive is provided, its HTML is rendered onto the page without JavaScript.
+
+A client directive can only be used on a UI framework component that is directly imported into a `.astro` component.
+
+
+#### client:load
+
+Loads and hydrates the component's JavaScript immediately on page load. Useful for immediately-visible UI elements that need to be interactive as soon as possible.
+
+#### client:idle
+
+Loads and hydrates the component's JavaScript once the page is done with its initial load and the `requestIdleCallback` event has fired. Useful for lower-priority UI elements that don't need to be immediately interactive.
+
+#### client:visible
+
+Loads and hydrates the component's JavaScript once the component has entered the user's viewport. This uses an `IntersectionObserver` internally to keep track of visibility. Useful for low-priority UI elements that are either far down the page (“below the fold”) or so resource-intensive to load that we would prefer not to load them at all if the user never saw the element.
+
+#### client:media
+
+Loads and hydrates the component's JavaScript once a certain CSS media query is met. Useful for sidebar toggles, or other elements that might only be visible on certain screen sizes.
+
+:::note
+If the component is already hidden and shown by a media query using CSS, then it can be easier to just use client:visible and not pass that same media query into the directive.
+:::
+
+```jsx
+<SidebarToggle client:media="(max-width: 50em)" />
+```
+
+#### client:only
+
+`client:only={string}` skips HTML server-rendering, and renders *only* on the client. It acts similar to `client:load` in that it loads, renders and hydrates the component immediately on page load.
+
+:::caution
+We must pass the component's correct framework as a value! Because Astro doesn't run the component during build / on the server, Astro doesn't know what framework the component uses unless we tell it explicitly.
+:::
+
+```jsx
+<SomeAngularComponent client:only="angular" />
+```

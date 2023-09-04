@@ -85,6 +85,10 @@ export default defineConfig({
         {
           label: "Project structure",
           link: "structure"
+        },
+        {
+          label: 'Astro',
+          link: 'astro'
         }
       ],
     }),
